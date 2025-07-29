@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanoLLM_gpt"
+version = "0.0.1"
+description = "A clean, modular implementation of GPT with training, inference, and serving capabilities"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "GPT Project Team"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/MalayMDas/nanoLLM_gpt"
+Repository = "https://github.com/MalayMDas/nanoLLM_gpt"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=22.0",
+    "flake8>=5.0",
+    "mypy>=0.990",
+    "isort>=5.0",
+]
+datasets = [
+    "datasets>=2.0",
+]
+wandb = [
+    "wandb>=0.13",
+]
+
+[project.scripts]
+gpt-train = "nanoLLM_gpt.train:main"
+gpt-generate = "nanoLLM_gpt.generate:main"
+gpt-server = "nanoLLM_gpt.server:main"
+
+[tool.setuptools]
+packages = ["nanoLLM_gpt", "nanoLLM_gpt.utils"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.package-data]
+nanoLLM_gpt = ["templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Ignore integration tests by default since they require a running server
+addopts = "--ignore=tests/integration_tests"

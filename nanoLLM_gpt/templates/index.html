@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT Model Interface</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            text-align: center;
+            padding: 1.5rem 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: -2px;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--primary-color);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background-color: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="file"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        button.secondary:hover {
+            background-color: var(--border-color);
+        }
+
+        button.danger {
+            background-color: var(--danger-color);
+        }
+
+        button.danger:hover {
+            background-color: #dc2626;
+        }
+
+        .status {
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .status.warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+
+        .status.error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .logs {
+            background-color: #1f2937;
+            color: #f3f4f6;
+            padding: 1rem;
+            border-radius: 6px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 0.25rem;
+        }
+
+        .generated-text {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            white-space: pre-wrap;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .model-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background-color: var(--bg-secondary);
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+
+        .model-info .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+        }
+
+        .model-info.not-loaded .status-dot {
+            background-color: var(--text-secondary);
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .slider {
+            flex: 1;
+        }
+
+        .slider-value {
+            min-width: 3rem;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 0.8s linear infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .radio-option input[type="radio"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .divider {
+            height: 1px;
+            background-color: var(--border-color);
+            margin: 1.5rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .tabs {
+                flex-wrap: wrap;
+            }
+            
+            .tab {
+                font-size: 0.875rem;
+                padding: 0.5rem 1rem;
+            }
+
+            .radio-group {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>GPT Model Interface</h1>
+            <div id="model-info" class="model-info not-loaded">
+                <span class="status-dot"></span>
+                <span class="info-text">No model loaded</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('generate')">Generate Text</button>
+            <button class="tab" onclick="switchTab('train')">Train Model</button>
+            <button class="tab" onclick="switchTab('api')">API Documentation</button>
+        </div>
+
+        <!-- Generate Tab -->
+        <div id="generate-tab" class="tab-content active">
+            <div class="card">
+                <h2>Model Configuration</h2>
+                
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="model-type-hf" name="model-source" value="huggingface" checked onchange="toggleModelInput()">
+                        <label for="model-type-hf">HuggingFace Model</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="model-type-checkpoint" name="model-source" value="checkpoint" onchange="toggleModelInput()">
+                        <label for="model-type-checkpoint">Custom Checkpoint</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="model-type-current" name="model-source" value="current" onchange="toggleModelInput()">
+                        <label for="model-type-current">Currently Loaded Model</label>
+                    </div>
+                </div>
+
+                <div id="huggingface-input" class="form-group">
+                    <label for="hf-model-select">Select Model</label>
+                    <select id="hf-model-select">
+                        <option value="gpt2">GPT-2 (124M parameters)</option>
+                        <option value="gpt2-medium">GPT-2 Medium (350M parameters)</option>
+                        <option value="gpt2-large">GPT-2 Large (774M parameters)</option>
+                        <option value="gpt2-xl">GPT-2 XL (1.5B parameters)</option>
+                    </select>
+                    <button onclick="loadModel()" style="margin-top: 0.5rem;">Load Model</button>
+                </div>
+
+                <div id="checkpoint-input" class="form-group" style="display: none;">
+                    <label for="checkpoint-path">Checkpoint Path or URL</label>
+                    <input type="text" id="checkpoint-path" placeholder="e.g., out/ckpt.pt or http://example.com/model.pt">
+                    
+                    <label for="config-path" style="margin-top: 1rem;">Config File (Optional)</label>
+                    <input type="text" id="config-path" placeholder="e.g., out/config.yaml or upload file below">
+                    
+                    <div style="margin-top: 0.5rem;">
+                        <label for="checkpoint-file" style="font-size: 0.875rem;">Or upload files:</label>
+                        <input type="file" id="checkpoint-file" accept=".pt,.pth" style="margin-top: 0.25rem;">
+                        <input type="file" id="config-file" accept=".yaml,.yml,.json" style="margin-top: 0.25rem;">
+                    </div>
+                    
+                    <button onclick="loadModel()" style="margin-top: 0.5rem;">Load Model</button>
+                </div>
+
+                <div id="current-model-info" class="form-group" style="display: none;">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary);">
+                        Using the currently loaded model. Load a different model using the options above.
+                    </p>
+                    <button onclick="downloadModelConfig()" style="margin-top: 0.5rem;">Download Model Config</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Text Generation</h2>
+                
+                <div class="form-group">
+                    <label for="prompt">Prompt</label>
+                    <textarea id="prompt" placeholder="Enter your prompt here...">Once upon a time, in a land far away,</textarea>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="max-tokens">Max Tokens</label>
+                        <div class="slider-group">
+                            <input type="range" id="max-tokens" min="10" max="500" value="100" class="slider">
+                            <span class="slider-value">100</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temperature">Temperature</label>
+                        <div class="slider-group">
+                            <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="0.8" class="slider">
+                            <span class="slider-value">0.8</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="top-k">Top K</label>
+                        <div class="slider-group">
+                            <input type="range" id="top-k" min="1" max="200" value="50" class="slider">
+                            <span class="slider-value">50</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="top-p">Top P</label>
+                        <div class="slider-group">
+                            <input type="range" id="top-p" min="0.1" max="1.0" step="0.05" value="1.0" class="slider">
+                            <span class="slider-value">1.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="generateText()" id="generate-btn">Generate</button>
+
+                <div id="generated-output" style="display: none;">
+                    <h3>Generated Text:</h3>
+                    <div id="generated-text" class="generated-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Train Tab -->
+        <div id="train-tab" class="tab-content">
+            <div class="card">
+                <h2>Training Data</h2>
+                
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="data-file" name="data-source" value="file" checked onchange="toggleDataInput()">
+                        <label for="data-file">Upload File</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="data-url" name="data-source" value="url" onchange="toggleDataInput()">
+                        <label for="data-url">URL</label>
+                    </div>
+                </div>
+
+                <div id="file-input" class="form-group">
+                    <label for="training-file">Training Data File</label>
+                    <input type="file" id="training-file" accept=".txt">
+                </div>
+
+                <div id="url-input" class="form-group" style="display: none;">
+                    <label for="training-url">Data URL</label>
+                    <input type="text" id="training-url" placeholder="https://example.com/training_data.txt">
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Training Configuration</h2>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="batch-size">Batch Size</label>
+                        <input type="number" id="batch-size" value="12" min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="learning-rate">Learning Rate</label>
+                        <input type="number" id="learning-rate" value="0.0006" step="0.0001">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-iters">Max Iterations</label>
+                        <input type="number" id="max-iters" value="5000" min="100">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="eval-interval">Eval Interval</label>
+                        <input type="number" id="eval-interval" value="500" min="10">
+                    </div>
+                </div>
+
+                <h3>Model Architecture</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="n-layer">Number of Layers</label>
+                        <input type="number" id="n-layer" value="12" min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="n-head">Number of Heads</label>
+                        <input type="number" id="n-head" value="12" min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="n-embd">Embedding Size</label>
+                        <input type="number" id="n-embd" value="768" min="64">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="block-size">Block Size</label>
+                        <input type="number" id="block-size" value="1024" min="128">
+                    </div>
+                </div>
+
+                <button onclick="startTraining()" id="start-train-btn">Start Training</button>
+                <button onclick="stopTraining()" id="stop-train-btn" class="danger" style="display: none; margin-left: 0.5rem;">Stop Training</button>
+
+                <div id="training-status" class="status success" style="display: none; margin-top: 1rem;">
+                    Ready to start training
+                </div>
+
+                <h3>Training Logs</h3>
+                <div id="training-logs" class="logs"></div>
+            </div>
+        </div>
+
+        <!-- API Tab -->
+        <div id="api-tab" class="tab-content">
+            <div class="card">
+                <h2>API Documentation</h2>
+                
+                <p>This server provides an OpenAI-compatible API for text generation.</p>
+                
+                <h3>Endpoints</h3>
+                
+                <div style="background-color: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+                    <h4>Chat Completions</h4>
+                    <p><code>POST /v1/chat/completions</code></p>
+                    <pre style="margin-top: 0.5rem; overflow-x: auto;">
+{
+  "model": "gpt",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello!"}
+  ],
+  "temperature": 0.8,
+  "max_tokens": 100
+}</pre>
+                </div>
+
+                <div style="background-color: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+                    <h4>Text Completions</h4>
+                    <p><code>POST /v1/completions</code></p>
+                    <pre style="margin-top: 0.5rem; overflow-x: auto;">
+{
+  "model": "gpt",
+  "prompt": "Once upon a time",
+  "temperature": 0.8,
+  "max_tokens": 100,
+  "top_k": 50
+}</pre>
+                </div>
+
+                <div style="background-color: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+                    <h4>List Models</h4>
+                    <p><code>GET /v1/models</code></p>
+                </div>
+
+                <h3>Example Usage</h3>
+                <pre style="background-color: #1f2937; color: #f3f4f6; padding: 1rem; border-radius: 6px; overflow-x: auto;">
+# Using curl
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Using Python with OpenAI client
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="not-needed"
+)
+
+response = client.chat.completions.create(
+    model="gpt",
+    messages=[{"role": "user", "content": "Hello!"}]
+)</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let trainingInterval = null;
+
+        // Initialize sliders
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            const valueSpan = slider.parentElement.querySelector('.slider-value');
+            slider.addEventListener('input', () => {
+                valueSpan.textContent = slider.value;
+            });
+        });
+
+        // Load model info on page load
+        window.addEventListener('load', () => {
+            updateModelInfo();
+        });
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        function toggleModelInput() {
+            const modelSource = document.querySelector('input[name="model-source"]:checked').value;
+            
+            document.getElementById('huggingface-input').style.display = 
+                modelSource === 'huggingface' ? 'block' : 'none';
+            document.getElementById('checkpoint-input').style.display = 
+                modelSource === 'checkpoint' ? 'block' : 'none';
+            document.getElementById('current-model-info').style.display = 
+                modelSource === 'current' ? 'block' : 'none';
+        }
+
+        function toggleDataInput() {
+            const dataSource = document.querySelector('input[name="data-source"]:checked').value;
+            
+            document.getElementById('file-input').style.display = 
+                dataSource === 'file' ? 'block' : 'none';
+            document.getElementById('url-input').style.display = 
+                dataSource === 'url' ? 'block' : 'none';
+        }
+
+        async function updateModelInfo() {
+            try {
+                const response = await fetch('/api/model/info');
+                const info = await response.json();
+                
+                const modelInfoEl = document.getElementById('model-info');
+                const infoTextEl = modelInfoEl.querySelector('.info-text');
+                
+                if (info.loaded) {
+                    modelInfoEl.classList.remove('not-loaded');
+                    const modelName = info.model_type || 'Custom Model';
+                    infoTextEl.textContent = `${modelName}: ${info.num_parameters_millions.toFixed(1)}M parameters`;
+                } else {
+                    modelInfoEl.classList.add('not-loaded');
+                    infoTextEl.textContent = 'No model loaded';
+                }
+            } catch (error) {
+                console.error('Error fetching model info:', error);
+            }
+        }
+
+        async function loadModel() {
+            const modelSource = document.querySelector('input[name="model-source"]:checked').value;
+            
+            if (modelSource === 'huggingface') {
+                const requestData = {
+                    model_type: document.getElementById('hf-model-select').value
+                };
+                
+                try {
+                    const response = await fetch('/api/model/load', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(requestData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Model loaded successfully!');
+                        updateModelInfo();
+                    } else {
+                        alert('Failed to load model: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Error loading model: ' + error);
+                }
+            } else if (modelSource === 'checkpoint') {
+                // Check if files are uploaded or paths are provided
+                const checkpointFile = document.getElementById('checkpoint-file').files[0];
+                const configFile = document.getElementById('config-file').files[0];
+                const checkpointPath = document.getElementById('checkpoint-path').value;
+                const configPath = document.getElementById('config-path').value;
+                
+                if (!checkpointFile && !checkpointPath) {
+                    alert('Please provide a checkpoint file or path');
+                    return;
+                }
+                
+                // Use FormData for file uploads
+                const formData = new FormData();
+                
+                if (checkpointFile) {
+                    formData.append('checkpoint', checkpointFile);
+                } else if (checkpointPath) {
+                    formData.append('checkpoint_path', checkpointPath);
+                }
+                
+                if (configFile) {
+                    formData.append('config', configFile);
+                } else if (configPath) {
+                    formData.append('config_path', configPath);
+                }
+                
+                try {
+                    const response = await fetch('/api/model/load', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Model loaded successfully!');
+                        updateModelInfo();
+                        
+                        // Clear file inputs after successful load
+                        document.getElementById('checkpoint-file').value = '';
+                        document.getElementById('config-file').value = '';
+                    } else {
+                        alert('Failed to load model: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Error loading model: ' + error);
+                }
+            }
+        }
+
+        async function generateText() {
+            const generateBtn = document.getElementById('generate-btn');
+            const originalText = generateBtn.textContent;
+            
+            try {
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = 'Generating<span class="loading"></span>';
+                
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prompt: document.getElementById('prompt').value,
+                        max_tokens: parseInt(document.getElementById('max-tokens').value),
+                        temperature: parseFloat(document.getElementById('temperature').value),
+                        top_k: parseInt(document.getElementById('top-k').value),
+                        top_p: parseFloat(document.getElementById('top-p').value)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('generated-output').style.display = 'block';
+                    document.getElementById('generated-text').textContent = result.text;
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error generating text: ' + error);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = originalText;
+            }
+        }
+
+        async function startTraining() {
+            const dataSource = document.querySelector('input[name="data-source"]:checked').value;
+            const formData = new FormData();
+            
+            if (dataSource === 'file') {
+                const fileInput = document.getElementById('training-file');
+                if (!fileInput.files[0]) {
+                    alert('Please select a training file');
+                    return;
+                }
+                formData.append('file', fileInput.files[0]);
+            } else {
+                const url = document.getElementById('training-url').value;
+                if (!url) {
+                    alert('Please enter a data URL');
+                    return;
+                }
+                formData.append('url', url);
+            }
+            
+            const config = {
+                batch_size: parseInt(document.getElementById('batch-size').value),
+                learning_rate: parseFloat(document.getElementById('learning-rate').value),
+                max_iters: parseInt(document.getElementById('max-iters').value),
+                eval_interval: parseInt(document.getElementById('eval-interval').value),
+                n_layer: parseInt(document.getElementById('n-layer').value),
+                n_head: parseInt(document.getElementById('n-head').value),
+                n_embd: parseInt(document.getElementById('n-embd').value),
+                block_size: parseInt(document.getElementById('block-size').value)
+            };
+            
+            formData.append('config', JSON.stringify(config));
+            
+            try {
+                const response = await fetch('/api/training/start', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('start-train-btn').style.display = 'none';
+                    document.getElementById('stop-train-btn').style.display = 'inline-block';
+                    document.getElementById('training-status').style.display = 'block';
+                    document.getElementById('training-status').className = 'status warning';
+                    document.getElementById('training-status').textContent = 'Training in progress...';
+                    
+                    // Start polling for logs
+                    trainingInterval = setInterval(updateTrainingStatus, 1000);
+                } else {
+                    alert('Failed to start training: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error starting training: ' + error);
+            }
+        }
+
+        async function stopTraining() {
+            try {
+                const response = await fetch('/api/training/stop', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    clearInterval(trainingInterval);
+                    document.getElementById('start-train-btn').style.display = 'inline-block';
+                    document.getElementById('stop-train-btn').style.display = 'none';
+                    document.getElementById('training-status').className = 'status success';
+                    document.getElementById('training-status').textContent = 'Training stopped';
+                }
+            } catch (error) {
+                alert('Error stopping training: ' + error);
+            }
+        }
+
+        async function updateTrainingStatus() {
+            try {
+                const response = await fetch('/api/training/status');
+                const status = await response.json();
+                
+                if (!status.is_training) {
+                    clearInterval(trainingInterval);
+                    document.getElementById('start-train-btn').style.display = 'inline-block';
+                    document.getElementById('stop-train-btn').style.display = 'none';
+                    document.getElementById('training-status').className = 'status success';
+                    document.getElementById('training-status').textContent = 'Training completed';
+                }
+                
+                // Update logs
+                const logsDiv = document.getElementById('training-logs');
+                logsDiv.innerHTML = status.logs.map(log => 
+                    `<div class="log-entry">${log.message}</div>`
+                ).join('');
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+                
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+        
+        async function downloadModelConfig() {
+            try {
+                window.location.href = '/api/model/config?download=true';
+            } catch (error) {
+                alert('Error downloading config: ' + error);
+            }
+        }
+    </script>
+</body>
+</html>

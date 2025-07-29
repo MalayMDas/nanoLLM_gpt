@@ -1,0 +1,56 @@
+# Example training configuration for GPT models
+
+# Model architecture
+model:
+  block_size: 1024
+  vocab_size: 50304  # GPT-2 vocab_size padded for efficiency
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  dropout: 0.0
+  bias: true
+
+# Training settings
+init_from: scratch  # Options: 'scratch', 'resume', 'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'
+data_path: null  # Path to training data file or URL
+dataset: custom  # Dataset name
+
+# Output and logging
+out_dir: out
+eval_interval: 2000
+log_interval: 10
+eval_iters: 200
+always_save_checkpoint: true
+
+# Optimization
+batch_size: 12
+gradient_accumulation_steps: 40
+learning_rate: 6.0e-4
+max_iters: 100000
+weight_decay: 1.0e-1
+beta1: 0.9
+beta2: 0.95
+grad_clip: 1.0
+
+# Learning rate schedule
+decay_lr: true
+warmup_iters: 2000
+lr_decay_iters: 100000
+min_lr: 6.0e-5
+
+# System settings
+device: cuda
+dtype: bfloat16  # Options: 'float32', 'float16', 'bfloat16'
+compile: false  # PyTorch 2.0 compilation
+seed: 1337
+
+# Data preparation
+train_val_split: 0.0005
+
+# Weights & Biases logging (optional)
+wandb_log: false
+wandb_project: gpt-training
+wandb_run_name: gpt-base
+
+# Distributed training
+backend: nccl

@@ -1,0 +1,24 @@
+# Example server configuration
+
+# Server settings
+host: 0.0.0.0
+port: 8080
+debug: false
+
+# Model settings
+model_type: gpt2  # HuggingFace model type
+checkpoint_path: null  # Path to custom checkpoint (overrides model_type)
+device: cuda
+dtype: auto  # Options: 'auto', 'float32', 'float16', 'bfloat16'
+compile: false  # PyTorch 2.0 compilation
+
+# API settings
+max_batch_size: 16
+cors_enabled: true
+
+# Default generation parameters (can be overridden per request)
+default_generation:
+  max_new_tokens: 100
+  temperature: 0.8
+  top_k: 200
+  top_p: 1.0
