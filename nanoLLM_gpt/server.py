@@ -916,6 +916,7 @@ def start_training():
         - file: Training data file upload (optional)
         - url: URL to training data (optional)
         - config: JSON string with training parameters
+        - config_file: Configuration file upload (optional)
 
     Config Parameters:
         {
@@ -933,6 +934,11 @@ def start_training():
     Data Sources (mutually exclusive):
         1. File upload: Text file with training data
         2. URL: HTTP/HTTPS URL to download data from
+
+    Configuration Precedence:
+        1. UI form parameters (highest priority)
+        2. Uploaded config file parameters
+        3. Default values
 
     Response:
         {"success": true}  # If training started
@@ -975,8 +981,52 @@ def start_training():
         if not data_path:
             return jsonify({"success": False, "error": "No data source provided"}), 400
 
-        # Get training config
-        train_config = json.loads(request.form.get("config", "{}"))
+        # Start with default config
+        default_config = {
+            "out_dir": "out",
+            "batch_size": 12,
+            "max_iters": 5000,
+            "learning_rate": 0.0006,
+            "eval_interval": 500,
+            "n_layer": 12,
+            "n_head": 12,
+            "n_embd": 768,
+            "block_size": 1024
+        }
+        
+        # Load config from uploaded file if provided
+        file_config = {}
+        if "config_file" in request.files:
+            config_file = request.files["config_file"]
+            if config_file.filename:
+                # Read config file content
+                config_content = config_file.read().decode("utf-8")
+                if config_file.filename.endswith(".json"):
+                    file_config = json.loads(config_content)
+                elif config_file.filename.endswith((".yaml", ".yml")):
+                    import yaml
+                    file_config = yaml.safe_load(config_content)
+                
+                # Extract model parameters if config has nested structure
+                if "model" in file_config:
+                    model_params = file_config["model"]
+                    # Flatten model parameters into main config
+                    for key in ["n_layer", "n_head", "n_embd", "block_size"]:
+                        if key in model_params:
+                            file_config[key] = model_params[key]
+                
+                # Extract training parameters if present
+                if "training" in file_config:
+                    training_params = file_config["training"]
+                    for key in ["batch_size", "max_iters", "learning_rate", "eval_interval", "out_dir"]:
+                        if key in training_params:
+                            file_config[key] = training_params[key]
+
+        # Get UI config from form
+        ui_config = json.loads(request.form.get("config", "{}"))
+
+        # Merge configs with precedence: UI > file > default
+        train_config = {**default_config, **file_config, **ui_config}
 
         # Start training
         success = training_manager.start_training(train_config, data_path)

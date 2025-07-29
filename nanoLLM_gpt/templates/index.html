@@ -429,14 +429,8 @@
                     <label for="checkpoint-path">Checkpoint Path or URL</label>
                     <input type="text" id="checkpoint-path" placeholder="e.g., out/ckpt.pt or http://example.com/model.pt">
                     
-                    <label for="config-path" style="margin-top: 1rem;">Config File (Optional)</label>
-                    <input type="text" id="config-path" placeholder="e.g., out/config.yaml or upload file below">
-                    
-                    <div style="margin-top: 0.5rem;">
-                        <label for="checkpoint-file" style="font-size: 0.875rem;">Or upload files:</label>
-                        <input type="file" id="checkpoint-file" accept=".pt,.pth" style="margin-top: 0.25rem;">
-                        <input type="file" id="config-file" accept=".yaml,.yml,.json" style="margin-top: 0.25rem;">
-                    </div>
+                    <label for="config-path" style="margin-top: 1rem;">Config File Path or URL (Optional)</label>
+                    <input type="text" id="config-path" placeholder="e.g., out/config.yaml or http://example.com/config.yaml">
                     
                     <button onclick="loadModel()" style="margin-top: 0.5rem;">Load Model</button>
                 </div>
@@ -524,6 +518,18 @@
                 <div id="url-input" class="form-group" style="display: none;">
                     <label for="training-url">Data URL</label>
                     <input type="text" id="training-url" placeholder="https://example.com/training_data.txt">
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Configuration File (Optional)</h2>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                    Upload a YAML or JSON configuration file. Parameters in the file will be used as defaults, 
+                    but any values you set in the form below will take precedence.
+                </p>
+                <div class="form-group">
+                    <label for="config-file-upload">Configuration File</label>
+                    <input type="file" id="config-file-upload" accept=".yaml,.yml,.json">
                 </div>
             </div>
 
@@ -753,29 +759,20 @@ response = client.chat.completions.create(
                     alert('Error loading model: ' + error);
                 }
             } else if (modelSource === 'checkpoint') {
-                // Check if files are uploaded or paths are provided
-                const checkpointFile = document.getElementById('checkpoint-file').files[0];
-                const configFile = document.getElementById('config-file').files[0];
+                // Get paths from text inputs
                 const checkpointPath = document.getElementById('checkpoint-path').value;
                 const configPath = document.getElementById('config-path').value;
                 
-                if (!checkpointFile && !checkpointPath) {
-                    alert('Please provide a checkpoint file or path');
+                if (!checkpointPath) {
+                    alert('Please provide a checkpoint path or URL');
                     return;
                 }
                 
-                // Use FormData for file uploads
+                // Use FormData for consistency with server endpoint
                 const formData = new FormData();
+                formData.append('checkpoint_path', checkpointPath);
                 
-                if (checkpointFile) {
-                    formData.append('checkpoint', checkpointFile);
-                } else if (checkpointPath) {
-                    formData.append('checkpoint_path', checkpointPath);
-                }
-                
-                if (configFile) {
-                    formData.append('config', configFile);
-                } else if (configPath) {
+                if (configPath) {
                     formData.append('config_path', configPath);
                 }
                 
@@ -790,10 +787,6 @@ response = client.chat.completions.create(
                     if (result.success) {
                         alert('Model loaded successfully!');
                         updateModelInfo();
-                        
-                        // Clear file inputs after successful load
-                        document.getElementById('checkpoint-file').value = '';
-                        document.getElementById('config-file').value = '';
                     } else {
                         alert('Failed to load model: ' + result.error);
                     }
@@ -857,6 +850,12 @@ response = client.chat.completions.create(
                     return;
                 }
                 formData.append('url', url);
+            }
+            
+            // Check for config file upload
+            const configFileInput = document.getElementById('config-file-upload');
+            if (configFileInput.files[0]) {
+                formData.append('config_file', configFileInput.files[0]);
             }
             
             const config = {

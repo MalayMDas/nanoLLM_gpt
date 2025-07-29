@@ -210,6 +210,12 @@ gpt-server --config config/server_config.yaml
 gpt-server --checkpoint out/ckpt.pt --port 8080
 ```
 
+### 4. Running provided examples
+
+```bash
+# Runs provided example code
+python examples/basic_usage.py
+```
 ## Configuration
 
 ### Training Configuration
