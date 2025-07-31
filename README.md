@@ -42,11 +42,14 @@ Refer to **[Technical Handbook](handbook.md)** for comprehensive technical refer
 git clone https://github.com/MalayMDas/nanoLLM_gpt.git
 cd nanoLLM_gpt
 
+# Create a new python virtual environment
+python3 -m venv .venv
+
+#Activate the virtual environment
+source .venv/bin/activate
+
 # Install in development mode
 pip install -e .
-
-# Or install with optional dependencies
-pip install -e ".[dev,datasets,wandb]"
 ```
 
 ### Development Setup
