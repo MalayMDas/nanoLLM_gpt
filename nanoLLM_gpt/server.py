@@ -309,7 +309,7 @@ class TrainingManager:
             # Add compile flag if enabled
             # PyTorch compile (torch.compile) provides ~30% speedup but requires PyTorch 2.0+
             if train_config.get("compile", False):
-                cmd.append("--compile")
+                cmd.extend(["--compile", "true"])
 
             # Start process
             self.current_process = subprocess.Popen(
