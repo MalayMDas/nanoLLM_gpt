@@ -68,6 +68,9 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+# vs code
+.vscode
+
 # Sphinx documentation
 docs/_build/
 
@@ -211,3 +214,5 @@ __marimo__/
 Makefile
 uploads/
 out_gpt2/
+data/custom/
+out/
