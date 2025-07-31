@@ -6,9 +6,11 @@ import requests
 import json
 import os
 from pathlib import Path
+import pytest
 
 def test_checkpoint_loading():
     """Test loading custom checkpoints through the web server."""
+    pytest.skip("This is a manual test script requiring a running server")
     base_url = "http://localhost:8080"
     
     print("Testing Custom Checkpoint Loading")
@@ -81,7 +83,7 @@ def test_checkpoint_loading():
                               f"n_head={arch.get('n_head')}, n_embd={arch.get('n_embd')}")
                     
                     # Test generation
-                    test_generation(base_url)
+                    test_generation_with_server(base_url)
                 else:
                     print(f"  ✗ Failed to load checkpoint: {result.get('error')}")
             else:
@@ -98,8 +100,11 @@ def test_checkpoint_loading():
             print(f"  ✗ Error: {e}")
 
 
-def test_generation(base_url):
+def test_generation_with_server(base_url=None):
     """Test text generation with the loaded model."""
+    # This is a helper function called from main(), not a pytest test
+    if base_url is None:
+        return
     try:
         response = requests.post(
             f"{base_url}/api/generate",

@@ -11,6 +11,9 @@ from nanoLLM_gpt.utils import ModelLoader
 from nanoLLM_gpt.config import ModelConfig
 from nanoLLM_gpt.model import GPT
 
+# Import GPU check decorators from conftest
+from tests.conftest import requires_gpu
+
 
 class TestModelLoader:
     """Test cases for ModelLoader functionality."""
@@ -63,7 +66,8 @@ class TestModelLoader:
         assert info['architecture']['n_layer'] == 2
         assert info['architecture']['n_head'] == 2
     
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.gpu
+    @requires_gpu
     def test_device_setup(self):
         """Test device setup with CUDA."""
         device = ModelLoader._setup_device('cuda')
@@ -100,7 +104,8 @@ class TestModelContext:
             x = torch.randn(1, 10)
             assert x.shape == (1, 10)
     
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.gpu
+    @requires_gpu
     def test_cuda_context(self):
         """Test context manager for CUDA."""
         ctx = ModelLoader.get_model_context('cuda', dtype='float16')

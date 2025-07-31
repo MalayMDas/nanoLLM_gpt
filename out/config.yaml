@@ -9,16 +9,16 @@ dataset: custom
 decay_lr: true
 device: cuda
 dtype: bfloat16
-eval_interval: 5
+eval_interval: 50
 eval_iters: 200
 eval_only: false
 grad_clip: 1.0
 gradient_accumulation_steps: 40
-init_from: scratch
-learning_rate: 0.0006
+init_from: resume
+learning_rate: 1.0e-05
 log_interval: 1
 lr_decay_iters: 600000
-max_iters: 20
+max_iters: 2000
 min_lr: 6.0e-05
 model:
   bias: true
@@ -27,7 +27,7 @@ model:
   n_embd: 64
   n_head: 8
   n_layer: 6
-  vocab_size: 50257
+  vocab_size: 50304
 out_dir: out
 seed: 1337
 train_val_split: 0.0005

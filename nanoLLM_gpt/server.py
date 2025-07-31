@@ -187,7 +187,7 @@ class TrainingManager:
         self.training_config: Dict[str, Any] = {}
         self.lock = threading.Lock()
 
-    def start_training(self, train_config: Dict[str, Any], data_path: str) -> bool:
+    def start_training(self, train_config: Dict[str, Any], data_path: str, init_from: str = "scratch") -> bool:
         """
         Start a new training process with given configuration.
 
@@ -253,25 +253,63 @@ class TrainingManager:
                 max_iters=train_config.get("max_iters", 5000),
                 learning_rate=train_config.get("learning_rate", 6e-4),
                 eval_interval=train_config.get("eval_interval", 500),
+                train_val_split=train_config.get("train_val_split", 0.0005),
+                backend=train_config.get("backend", "nccl"),
                 data_path=data_path,
             )
             ConfigLoader.save_to_file(training_config, out_dir / "config.yaml")
 
-            # Prepare command
-            cmd = [
-                "gpt-train",
-                f"--data-path={data_path}",
+            # Check if distributed training is enabled
+            # DDP (Distributed Data Parallel) allows training across multiple GPUs/nodes
+            ddp_enabled = train_config.get("ddp_enabled", False)
+            
+            if ddp_enabled:
+                # Use torchrun for distributed training
+                # torchrun is PyTorch's distributed training launcher that handles:
+                # - Process spawning for each GPU
+                # - Environment variable setup (RANK, WORLD_SIZE, etc.)
+                # - Fault tolerance and elastic training
+                cmd = [
+                    "torchrun",
+                    f'--nproc_per_node={train_config.get("nproc_per_node", 4)}',  # Processes per node (usually = num GPUs)
+                    f'--nnodes={train_config.get("nnodes", 1)}',  # Total number of nodes
+                    f'--master_addr={train_config.get("master_addr", "127.0.0.1")}',  # Master node IP
+                    f'--master_port={train_config.get("master_port", 29500)}',  # Port for communication
+                    "-m", "nanoLLM_gpt.train",  # Run training module
+                ]
+            else:
+                # Single GPU/CPU training - use the installed gpt-train command
+                cmd = ["gpt-train"]
+            
+            # Add training arguments
+            # These arguments are passed to the training script regardless of DDP or single GPU
+            cmd.extend([
                 f'--out-dir={train_config.get("out_dir", "out")}',
-                f'--batch-size={train_config.get("batch_size", 12)}',
+                f'--init-from={init_from}',  # Can be 'scratch', 'resume', or 'gpt2*'
+                f'--batch-size={train_config.get("batch_size", 12)}',  # Per-GPU batch size
                 f'--max-iters={train_config.get("max_iters", 5000)}',
                 f'--learning-rate={train_config.get("learning_rate", 6e-4)}',
                 f'--eval-interval={train_config.get("eval_interval", 500)}',
-            ]
+                f'--train-val-split={train_config.get("train_val_split", 0.0005)}',
+                f'--backend={train_config.get("backend", "nccl")}',  # NCCL for GPU, Gloo for CPU
+            ])
+            
+            # Add data path only if provided
+            # For new training (scratch): data_path is required
+            # For resume training: data_path is optional (uses original if not provided)
+            # For pretrained fine-tuning: data_path is required
+            if data_path:
+                cmd.append(f"--data-path={data_path}")
 
             # Add optional parameters
             for key in ["n_layer", "n_head", "n_embd", "block_size"]:
                 if key in train_config:
                     cmd.append(f'--{key.replace("_", "-")}={train_config[key]}')
+            
+            # Add compile flag if enabled
+            # PyTorch compile (torch.compile) provides ~30% speedup but requires PyTorch 2.0+
+            if train_config.get("compile", False):
+                cmd.append("--compile")
 
             # Start process
             self.current_process = subprocess.Popen(
@@ -957,6 +995,9 @@ def start_training():
         - TrainingManager.start_training()
     """
     try:
+        # Get training mode
+        init_from = request.form.get("init_from", "scratch")
+        
         # Determine data source
         data_path = None
 
@@ -978,7 +1019,8 @@ def start_training():
                 # Training script will handle URL downloading
                 data_path = url
 
-        if not data_path:
+        # For new training, data is required
+        if init_from == "scratch" and not data_path:
             return jsonify({"success": False, "error": "No data source provided"}), 400
 
         # Start with default config
@@ -991,7 +1033,8 @@ def start_training():
             "n_layer": 12,
             "n_head": 12,
             "n_embd": 768,
-            "block_size": 1024
+            "block_size": 1024,
+            "compile": False  # PyTorch compile option
         }
         
         # Load config from uploaded file if provided
@@ -1027,9 +1070,26 @@ def start_training():
 
         # Merge configs with precedence: UI > file > default
         train_config = {**default_config, **file_config, **ui_config}
+        
+        # Handle output directory (Model Directory) based on init_from mode
+        # The Model Directory is a unified location for storing both checkpoint (ckpt.pt)
+        # and configuration (config.yaml) files together for better organization
+        if "out_dir" in request.form and request.form["out_dir"]:
+            # Use the provided Model Directory from the form
+            # This is the primary way users specify where to save their model
+            train_config["out_dir"] = request.form["out_dir"]
+        elif init_from == "resume" and "out_dir" in request.form:
+            # For resume mode, use the provided checkpoint directory
+            # This ensures training continues in the same directory
+            train_config["out_dir"] = request.form["out_dir"]
+        elif init_from.startswith("gpt2") and "out_dir" not in request.form:
+            # For HuggingFace models, auto-generate a directory name if not provided
+            # Pattern: out_<model_name> (e.g., out_gpt2, out_gpt2-medium)
+            # This helps organize fine-tuned models by their base model
+            train_config["out_dir"] = f"out_{init_from}"
 
         # Start training
-        success = training_manager.start_training(train_config, data_path)
+        success = training_manager.start_training(train_config, data_path, init_from)
 
         return jsonify({"success": success})
 

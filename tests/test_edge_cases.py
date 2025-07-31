@@ -13,6 +13,9 @@ from nanoLLM_gpt.model import GPT
 from nanoLLM_gpt.config import ModelConfig
 from nanoLLM_gpt.utils import DataPreparer, DataLoader
 
+# Import GPU check decorators from conftest
+from tests.conftest import requires_gpu
+
 
 class TestEdgeCases:
     """Test edge cases and error conditions."""
@@ -174,8 +177,24 @@ class TestEdgeCases:
 class TestModelOperations:
     """Test various model operations."""
     
-    def test_model_device_movement(self):
-        """Test moving model between devices."""
+    def test_model_device_movement_cpu(self):
+        """Test model creation on CPU."""
+        config = ModelConfig(
+            n_layer=2,
+            n_head=2,
+            n_embd=64,
+            block_size=128,
+            vocab_size=1000
+        )
+        
+        # Create model on CPU
+        model = GPT(config)
+        assert next(model.parameters()).device.type == 'cpu'
+    
+    @pytest.mark.gpu
+    @requires_gpu
+    def test_model_device_movement_gpu(self):
+        """Test moving model between CPU and GPU."""
         config = ModelConfig(
             n_layer=2,
             n_head=2,
@@ -188,14 +207,13 @@ class TestModelOperations:
         model = GPT(config)
         assert next(model.parameters()).device.type == 'cpu'
         
-        # Move to CUDA if available
-        if torch.cuda.is_available():
-            model = model.cuda()
-            assert next(model.parameters()).device.type == 'cuda'
-            
-            # Move back to CPU
-            model = model.cpu()
-            assert next(model.parameters()).device.type == 'cpu'
+        # Move to CUDA
+        model = model.cuda()
+        assert next(model.parameters()).device.type == 'cuda'
+        
+        # Move back to CPU
+        model = model.cpu()
+        assert next(model.parameters()).device.type == 'cpu'
     
     def test_model_inference_modes(self):
         """Test model in different inference modes."""

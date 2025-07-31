@@ -176,36 +176,58 @@ class Trainer:
         Sets up process groups and calculates effective batch size.
 
         Environment variables (set by torchrun):
-            - RANK: Global rank of this process
-            - LOCAL_RANK: Local GPU index on this node
-            - WORLD_SIZE: Total number of processes
+            - RANK: Global rank of this process (0 to world_size-1)
+            - LOCAL_RANK: Local GPU index on this node (0 to nproc_per_node-1)
+            - WORLD_SIZE: Total number of processes (nproc_per_node × nnodes)
+            - MASTER_ADDR: IP address of rank 0 node
+            - MASTER_PORT: Port for inter-process communication
 
         Effects:
             - Initializes process group for communication
             - Adjusts gradient accumulation for world size
             - Sets master_process flag for logging/saving
+            - Each process gets a unique seed offset
+
+        DDP Training Notes:
+            - Each process handles its own subset of data
+            - Gradients are synchronized across all processes
+            - Only rank 0 saves checkpoints and logs to W&B
+            - Effective batch size = batch_size × gradient_accumulation × world_size
 
         Called by: __init__
         """
+        # Check if we're running under torchrun/DDP
         self.ddp = int(os.environ.get("RANK", -1)) != -1
 
         if self.ddp:
+            # Initialize process group for inter-GPU communication
+            # Backend options: 'nccl' (GPU), 'gloo' (CPU/GPU), 'mpi' (if available)
             init_process_group(backend=self.config.backend)
-            self.ddp_rank = int(os.environ["RANK"])
-            self.ddp_local_rank = int(os.environ["LOCAL_RANK"])
-            self.ddp_world_size = int(os.environ["WORLD_SIZE"])
+            
+            # Get process ranks and world size from environment
+            self.ddp_rank = int(os.environ["RANK"])  # Global rank across all nodes
+            self.ddp_local_rank = int(os.environ["LOCAL_RANK"])  # GPU index on this node
+            self.ddp_world_size = int(os.environ["WORLD_SIZE"])  # Total number of processes
+            
+            # Only rank 0 handles logging, checkpointing, and W&B
             self.master_process = self.ddp_rank == 0
+            
+            # Ensure each process has a different random seed
             self.seed_offset = self.ddp_rank
 
             # Scale gradient accumulation by world size
+            # This ensures the effective batch size remains constant regardless of GPU count
+            # Example: If gradient_accumulation_steps=40 and world_size=4, each GPU accumulates 10 steps
             assert self.config.gradient_accumulation_steps % self.ddp_world_size == 0
             self.config.gradient_accumulation_steps //= self.ddp_world_size
         else:
+            # Single GPU/CPU training
             self.master_process = True
             self.seed_offset = 0
             self.ddp_world_size = 1
 
-        # Calculate tokens per iteration
+        # Calculate tokens per iteration for throughput monitoring
+        # Total tokens = micro_batch_size × gradient_accumulation × world_size × sequence_length
         self.tokens_per_iter = (
             self.config.gradient_accumulation_steps
             * self.ddp_world_size
@@ -232,12 +254,16 @@ class Trainer:
         Called by: __init__
         """
         if self.ddp:
+            # In DDP, each process uses a specific GPU based on LOCAL_RANK
+            # This ensures each process uses a different GPU on the node
             self.device = f"cuda:{self.ddp_local_rank}"
             torch.cuda.set_device(self.device)
         else:
+            # Single GPU/CPU training uses configured device
             self.device = self.config.device
 
         # Set random seed with rank offset for data diversity
+        # Each process gets different data order while maintaining reproducibility
         torch.manual_seed(self.config.seed + self.seed_offset)
 
         # Enable TF32 for better performance
@@ -399,10 +425,13 @@ class Trainer:
             self.model.crop_block_size(self.config.model.block_size)
 
         # Wrap in DDP if distributed
+        # DDP wrapper handles gradient synchronization across GPUs
+        # Only forward() and backward() are synchronized, not model updates
         if self.ddp:
             self.model = DDP(self.model, device_ids=[self.ddp_local_rank])
 
-        # Store unwrapped model reference
+        # Store unwrapped model reference for optimizer/scheduler
+        # DDP wraps the model, so we need the underlying model for configuration
         self.raw_model = self.model.module if self.ddp else self.model
 
     def setup_optimizer(self):
@@ -714,6 +743,8 @@ class Trainer:
             self.logger.finish()
 
         if self.ddp:
+            # Clean up distributed process group
+            # This ensures proper shutdown of inter-process communication
             destroy_process_group()
 
 
@@ -736,6 +767,10 @@ def main():
         - Running directly: python train.py
         - As module: python -m nanoLLM_gpt.train
         - Via entry point: gpt-train
+        - Via torchrun: torchrun --nproc_per_node=N -m nanoLLM_gpt.train
+
+    For distributed training, use torchrun which sets up the necessary
+    environment variables (RANK, WORLD_SIZE, etc.) automatically.
     """
     parser = argparse.ArgumentParser(
         description="Train GPT models",
@@ -760,6 +795,32 @@ def main():
         config = load_config(TrainingConfig, args.config, args)
     else:
         config = ConfigLoader.create_config_from_args(args, TrainingConfig)
+    
+    # Auto-load config when resuming from checkpoint directory
+    # This allows resuming training with the exact same configuration that was used originally,
+    # while still allowing command-line overrides for specific parameters
+    if config.init_from == "resume" and not args.config:
+        resume_config_path = Path(config.out_dir) / "config.yaml"
+        if resume_config_path.exists():
+            print(f"Loading configuration from {resume_config_path}")
+            # Load the saved config which includes the original data_path
+            saved_config = ConfigLoader.load_from_file(str(resume_config_path), TrainingConfig)
+            
+            # Merge with command-line arguments (CLI args take precedence)
+            # This allows users to override specific parameters while keeping the rest
+            for key, value in vars(args).items():
+                if value is not None and hasattr(saved_config, key):
+                    setattr(saved_config, key, value)
+            
+            # Ensure we keep the resume setting (not from saved config which might be 'scratch')
+            saved_config.init_from = "resume"
+            config = saved_config
+        else:
+            # No saved config found - this might happen when resuming from a checkpoint
+            # that was created before config saving was implemented, or when loading
+            # a pretrained model checkpoint without its original training config
+            print(f"No config.yaml found in {config.out_dir}, using default configuration")
+            print("Tip: Provide --data-path to specify training data")
 
     # Create trainer and run
     trainer = Trainer(config)

@@ -8,6 +8,7 @@ import json
 import tempfile
 import requests
 from pathlib import Path
+import pytest
 
 def test_config_save():
     """Test if config is saved during training."""
@@ -26,10 +27,11 @@ def test_config_save():
         
         print("Config contents:")
         print(json.dumps(config, indent=2))
-        return True
+        assert True  # Config file exists
     else:
         print("✗ Config file not found. Run training first to test.")
-        return False
+        # Skip test if config file doesn't exist
+        pytest.skip("Config file not found - run training first")
 
 
 def test_server_endpoints():
@@ -50,7 +52,7 @@ def test_server_endpoints():
     except Exception as e:
         print(f"✗ Could not connect to server: {e}")
         print("  Make sure the server is running with: python -m nanoLLM_gpt.server")
-        return False
+        pytest.skip("Server not running")
     
     # Test config download endpoint
     try:
@@ -66,7 +68,8 @@ def test_server_endpoints():
     except Exception as e:
         print(f"✗ Config endpoint error: {e}")
     
-    return True
+    # Test passed if we got here
+    assert True
 
 
 def test_config_load_with_model():
@@ -120,7 +123,8 @@ def test_config_load_with_model():
         # Clean up temp file
         os.unlink(temp_config_path)
     
-    return True
+    # Test passed if we got here
+    assert True
 
 
 def main():

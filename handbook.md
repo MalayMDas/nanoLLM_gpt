@@ -200,6 +200,105 @@ main() [server.py]
                 └── subprocess.Popen(['gpt-train', ...])
 ```
 
+## Model Directory Organization
+
+The project uses a **Model Directory** approach for better model management. Each model is stored in its own directory containing both the checkpoint and configuration files.
+
+### Directory Structure
+
+A Model Directory contains:
+- `ckpt.pt`: The model checkpoint with weights and training state
+- `config.yaml`: The configuration used for training (auto-saved)
+
+### Benefits
+
+1. **Organization**: Keep related files together
+2. **Versioning**: Easy to manage multiple model versions
+3. **Portability**: Move entire model by copying one directory
+4. **Clarity**: Clear association between checkpoint and its config
+
+### Usage in Code
+
+#### Training with Model Directory
+```python
+from nanoLLM_gpt.config import TrainingConfig, ModelConfig
+
+config = TrainingConfig(
+    model=ModelConfig(n_layer=12, n_head=12, n_embd=768),
+    out_dir="models/experiments/run_001",  # Model Directory
+    data_path="data.txt",
+    max_iters=10000
+)
+
+# After training, the directory will contain:
+# models/experiments/run_001/
+#   ├── ckpt.pt      # Model checkpoint
+#   └── config.yaml  # Training configuration
+```
+
+#### Loading from Model Directory
+```python
+from nanoLLM_gpt.utils import ModelLoader
+
+# Load model using directory paths
+model = ModelLoader.load_model(
+    checkpoint_path="models/production/v1.0/ckpt.pt",
+    config_path="models/production/v1.0/config.yaml"
+)
+```
+
+#### Resume Training
+```bash
+# The config.yaml is automatically loaded from the model directory
+gpt-train --init-from resume --out-dir models/my_experiment
+```
+
+### Automatic Directory Naming
+
+When fine-tuning HuggingFace models without specifying `--out-dir`:
+- `gpt2` → `out_gpt2/`
+- `gpt2-medium` → `out_gpt2-medium/`
+- `gpt2-large` → `out_gpt2-large/`
+- `gpt2-xl` → `out_gpt2-xl/`
+
+### Web Interface Integration
+
+The web interface has been updated with Model Directory support:
+
+1. **Train Model Tab**:
+   - "Model Directory" field specifies output location
+   - Automatically updates based on training mode
+   - Disabled for resume mode to prevent confusion
+
+2. **Generate Text Tab**:
+   - Single "Model Directory" field instead of separate paths
+   - Automatically constructs paths to ckpt.pt and config.yaml
+
+### Best Practices
+
+1. **Naming Convention**: Use descriptive names including experiment details
+   ```
+   models/experiments/lr_3e4_batch_12_layer_6/
+   models/production/v1.0_shakespeare/
+   models/finetuned/gpt2_medical_v2/
+   ```
+
+2. **Directory Structure**: Organize by purpose
+   ```
+   models/
+   ├── experiments/    # Development models
+   ├── production/     # Deployed models
+   └── finetuned/      # Fine-tuned models
+   ```
+
+3. **Documentation**: Include README in model directories
+   ```
+   models/production/v1.0/
+   ├── ckpt.pt
+   ├── config.yaml
+   └── README.md      # Model description, training details
+   ```
+
 ## Complete Function Reference
 
 ### Core Model Functions (model.py)
@@ -507,6 +606,121 @@ Configuration for GPT model architecture that defines the structural parameters 
 
 Comprehensive settings for the training process including model architecture, optimization hyperparameters, data settings, and logging options.
 
+#### Distributed Training (DDP) Configuration
+
+The training system supports distributed data parallel (DDP) training across multiple GPUs and nodes:
+
+1. **DDP Parameters:**
+   - `backend`: Backend for distributed training ("nccl" for GPU, "gloo" for CPU)
+   - `ddp_enabled`: Whether to use distributed training (auto-detected from environment)
+   - `nproc_per_node`: Number of processes per node (typically equals number of GPUs)
+   - `nnodes`: Number of nodes in distributed training
+   - `node_rank`: Rank of current node (0 for master)
+   - `master_addr`: IP address of master node
+   - `master_port`: Port for distributed communication
+
+2. **Multi-GPU Training:**
+   ```bash
+   # Single node, 4 GPUs
+   torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \
+     --data-path data.txt --out-dir out_ddp
+
+   # Or use the web interface with DDP parameters enabled
+   ```
+
+3. **Multi-Node Training:**
+   ```bash
+   # On master node (node 0)
+   torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 \
+     --master_addr=192.168.1.100 --master_port=29500 \
+     -m nanoLLM_gpt.train --config config.yaml
+
+   # On worker node (node 1)
+   torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 \
+     --master_addr=192.168.1.100 --master_port=29500 \
+     -m nanoLLM_gpt.train --config config.yaml
+   ```
+
+4. **Web Interface DDP Support:**
+   The web interface includes DDP parameters in the "Distributed Training" section:
+   - Backend selection (NCCL/Gloo)
+   - Enable DDP checkbox
+   - Number of processes per node
+   - Number of nodes
+   - Master address and port configuration
+
+5. **Important DDP Notes:**
+   - Effective batch size = batch_size × gradient_accumulation_steps × world_size
+   - Learning rate scaling: Consider scaling LR with world size
+   - Each process loads its own data shard automatically
+   - Checkpoints are saved only by the master process (rank 0)
+   - Use NCCL backend for GPUs (much faster than Gloo)
+   - Ensure all nodes have the same environment and code version
+
+### Resume Training Functionality
+
+The training system supports three initialization modes, all utilizing the Model Directory concept:
+
+1. **From Scratch** (`--init-from scratch`):
+   - Creates a new model with random weights
+   - Requires `--data-path` to be specified
+   - Uses default or provided configuration
+   - Saves to specified Model Directory (default: "out")
+
+2. **Resume Training** (`--init-from resume`):
+   - Loads from Model Directory: `{out_dir}/ckpt.pt` and `{out_dir}/config.yaml`
+   - Automatically loads saved configuration from the Model Directory
+   - If no config.yaml found, uses default configuration
+   - Restores optimizer state and training progress (iter_num, best_val_loss)
+   - Data path is optional - if not provided, uses the path from saved config
+   - Continues saving to the same Model Directory
+
+3. **Fine-tune Pretrained** (`--init-from gpt2*`):
+   - Loads pretrained weights from HuggingFace
+   - No config.yaml exists initially (uses model defaults)
+   - Requires `--data-path` for training data
+   - Auto-creates Model Directory: `out_<model_name>` (e.g., `out_gpt2-medium`)
+   - Saves config.yaml during training for future resume
+   - Supports models: gpt2, gpt2-medium, gpt2-large, gpt2-xl
+   - Checkpoints saved to `out_<model_name>` directory
+
+#### Web Interface HuggingFace Support:
+The web interface provides an intuitive way to fine-tune HuggingFace models:
+- Select "Fine-tune HuggingFace Model" in the Training Mode section
+- Choose from available GPT-2 model sizes
+- Upload or provide URL for domain-specific training data
+- Model weights are automatically downloaded on first use
+- Fine-tuned checkpoints are saved to model-specific directories
+
+#### Configuration Precedence (highest to lowest):
+1. Command-line arguments
+2. Explicitly provided config file (`--config`)
+3. Auto-loaded config.yaml (when resuming)
+4. Default values in TrainingConfig
+
+#### Example Resume Workflows with Model Directories:
+
+```bash
+# Simple resume - continues from model directory with saved config
+gpt-train --init-from resume --out-dir models/my_experiment
+
+# Resume with new data (keeps model architecture from config.yaml)
+gpt-train --init-from resume --out-dir models/my_experiment \
+  --data-path new_data.txt
+
+# Resume with modified hyperparameters (overrides saved config)
+gpt-train --init-from resume --out-dir models/my_experiment \
+  --learning-rate 1e-4 --max-iters 10000
+
+# Fine-tune pretrained model with automatic directory
+gpt-train --init-from gpt2-medium --data-path domain_data.txt
+# Creates: out_gpt2-medium/ckpt.pt and out_gpt2-medium/config.yaml
+
+# Fine-tune with custom model directory
+gpt-train --init-from gpt2-large --data-path medical_data.txt \
+  --out-dir models/finetuned/gpt2_large_medical
+```
+
 | Parameter | Data Type | Default Value | Description | Used in File/Function |
 |-----------|-----------|---------------|-------------|----------------------|
 | **Model Settings** |
@@ -626,14 +840,20 @@ learning_rate: 3e-4
 gpt-train --config config/my_training.yaml
 ```
 
-3. **Resume training:**
+3. **Resume training from Model Directory:**
 ```bash
-gpt-train --init-from resume --out-dir checkpoints/run1
+# Auto-loads config.yaml from the model directory
+gpt-train --init-from resume --out-dir models/experiments/run1
 ```
 
-4. **Fine-tune from pretrained:**
+4. **Fine-tune from pretrained with Model Directory:**
 ```bash
+# Auto-creates out_gpt2/ directory
 gpt-train --init-from gpt2 --data-path data.txt --learning-rate 1e-4
+
+# Or specify custom directory
+gpt-train --init-from gpt2 --data-path data.txt \
+  --out-dir models/finetuned/gpt2_custom --learning-rate 1e-4
 ```
 
 #### Distributed Training
@@ -643,9 +863,15 @@ gpt-train --init-from gpt2 --data-path data.txt --learning-rate 1e-4
 torchrun --nproc_per_node=4 -m nanoLLM_gpt.train --config config/train.yaml
 ```
 
-2. **Multiple nodes** (on master node):
+2. **Multiple nodes:**
 ```bash
+# On master node (node 0)
 torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 \
+  --master_addr=192.168.1.1 --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train.yaml
+
+# On worker node (node 1)  
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 \
   --master_addr=192.168.1.1 --master_port=29500 \
   -m nanoLLM_gpt.train --config config/train.yaml
 ```
@@ -657,8 +883,21 @@ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 \
 #SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=8
 
-srun python -m nanoLLM_gpt.train --config config/train.yaml
+srun torchrun \
+  --nproc_per_node=$SLURM_GPUS_PER_NODE \
+  --nnodes=$SLURM_NNODES \
+  --node_rank=$SLURM_NODEID \
+  --master_addr=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) \
+  --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train.yaml
 ```
+
+4. **Using the Web Interface for DDP:**
+   - Navigate to the "Train Model" tab
+   - Enable "Distributed Training"
+   - Set number of processes (GPUs) per node
+   - For multi-node: set number of nodes, master address, and port
+   - The server will automatically use `torchrun` with your settings
 
 #### Training Best Practices
 
@@ -836,15 +1075,23 @@ Access the web interface at `http://localhost:8080` after starting the server.
 #### Features:
 
 1. **Text Generation Tab:**
+   - **Model Directory**: Single field for loading models
+   - Load from HuggingFace or custom checkpoint directories
    - Interactive prompt input
    - Real-time parameter adjustment with sliders
    - Visual feedback during generation
    - Generated text display
 
 2. **Training Tab:**
-   - Upload training data
+   - **Model Directory**: Unified output location field
+   - Three training modes with automatic directory management:
+     - New Training: Custom directory (default: "out")
+     - Resume Training: Locked to existing directory
+     - Fine-tune HuggingFace: Auto-generates (e.g., "out_gpt2-medium")
+   - Upload training data or provide URL
    - Configure model architecture
    - Set training hyperparameters
+   - Distributed training (DDP) support
    - Start/stop training
    - Real-time log streaming
 

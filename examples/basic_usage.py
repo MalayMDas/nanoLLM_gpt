@@ -219,6 +219,273 @@ def example_6_streaming_generation():
     print("\n")
 
 
+def example_7_training_from_scratch():
+    """Example 7: Training a model from scratch with Model Directory.
+    
+    Demonstrates how to train models and organize outputs using the
+    model directory feature. The model directory contains both the
+    checkpoint (ckpt.pt) and configuration (config.yaml) files.
+    """
+    print("Example 7: Training from Scratch")
+    print("-" * 50)
+    print("This example shows how to train a model programmatically.")
+    print("For actual training, use the command-line interface:\n")
+    
+    # Single GPU training with custom model directory
+    print("Single GPU training with custom model directory:")
+    print("  gpt-train --data-path data.txt --out-dir custom_models/my_experiment --max-iters 1000")
+    print()
+    
+    # Multi-GPU training with DDP
+    print("Multi-GPU training (4 GPUs) with model directory:")
+    print("  torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \\")
+    print("    --data-path data.txt --out-dir experiments/large_model --max-iters 1000")
+    print()
+    
+    # Training configuration example
+    print("Training configuration with model directory organization:")
+    config = TrainingConfig(
+        model=ModelConfig(
+            n_layer=6,
+            n_head=6,
+            n_embd=384,
+            block_size=512
+        ),
+        out_dir="models/my_custom_gpt",  # Model directory for checkpoints and config
+        batch_size=12,
+        max_iters=1000,
+        learning_rate=3e-4,
+        train_val_split=0.1
+    )
+    
+    print(f"  Model: {config.model.n_layer} layers, {config.model.n_embd} dim")
+    print(f"  Batch size: {config.batch_size}")
+    print(f"  Learning rate: {config.learning_rate}")
+    print(f"  Train/val split: {config.train_val_split}")
+    print(f"  Model directory: {config.out_dir}")
+    print(f"    - Checkpoint will be saved to: {config.out_dir}/ckpt.pt")
+    print(f"    - Config will be saved to: {config.out_dir}/config.yaml")
+    print()
+
+
+def example_8_resume_training():
+    """Example 8: Resume training from checkpoint using Model Directory.
+    
+    Shows how to resume training from a model directory that contains
+    both the checkpoint and configuration. The config.yaml is automatically
+    loaded when resuming, maintaining all original settings unless overridden.
+    """
+    print("Example 8: Resume Training with Model Directory")
+    print("-" * 50)
+    print("Examples of resuming training from model directories:\n")
+    
+    # Resume with same configuration
+    print("1. Resume with original configuration from model directory:")
+    print("   # Automatically loads models/my_custom_gpt/config.yaml")
+    print("   gpt-train --init-from resume --out-dir models/my_custom_gpt")
+    print()
+    
+    # Resume with new data
+    print("2. Resume with new training data:")
+    print("   # Keeps model architecture from config.yaml but uses new data")
+    print("   gpt-train --init-from resume --out-dir models/my_custom_gpt \\")
+    print("     --data-path new_data.txt")
+    print()
+    
+    # Resume with modified hyperparameters
+    print("3. Resume with different learning rate:")
+    print("   # Overrides learning rate from saved config")
+    print("   gpt-train --init-from resume --out-dir models/my_custom_gpt \\")
+    print("     --learning-rate 1e-4 --max-iters 2000")
+    print()
+    
+    # Multi-GPU resume
+    print("4. Resume on multiple GPUs from model directory:")
+    print("   torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \\")
+    print("     --init-from resume --out-dir experiments/large_model")
+    print()
+    
+    # Loading for inference
+    print("5. Load model from directory for inference:")
+    print("   ```python")
+    print("   # Option 1: Using model directory")
+    print("   pipeline = InferencePipeline()")
+    print("   pipeline.load_model(")
+    print("       checkpoint_path='models/my_custom_gpt/ckpt.pt',")
+    print("       config_path='models/my_custom_gpt/config.yaml'")
+    print("   )")
+    print("   ```")
+    print()
+
+
+def example_9_finetune_pretrained():
+    """Example 9: Fine-tune a pretrained model with Model Directory.
+    
+    Demonstrates fine-tuning pretrained models with organized output
+    directories. When fine-tuning HuggingFace models, the default model
+    directory follows the pattern 'out_<model_name>' for easy identification.
+    """
+    print("Example 9: Fine-tune Pretrained Model with Model Directory")
+    print("-" * 50)
+    print("Examples of fine-tuning pretrained models:\n")
+    
+    # Fine-tune GPT-2 with automatic directory
+    print("1. Fine-tune GPT-2 with automatic model directory:")
+    print("   # Creates model directory: out_gpt2/")
+    print("   gpt-train --init-from gpt2 --data-path domain_data.txt \\")
+    print("     --learning-rate 5e-5")
+    print()
+    
+    # Fine-tune with custom directory
+    print("2. Fine-tune GPT-2 Medium with custom model directory:")
+    print("   gpt-train --init-from gpt2-medium --data-path data.txt \\")
+    print("     --out-dir finetuned_models/gpt2_medium_medical \\")
+    print("     --learning-rate 3e-5 --batch-size 8 --gradient-accumulation-steps 4")
+    print()
+    
+    # Multi-GPU fine-tuning
+    print("3. Fine-tune on multiple GPUs with organized directories:")
+    print("   torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \\")
+    print("     --init-from gpt2-large --data-path data.txt \\")
+    print("     --out-dir experiments/gpt2_large_domain_specific --batch-size 4")
+    print()
+    
+    # Loading fine-tuned model from directory
+    print("4. Load and use fine-tuned model from model directory:")
+    print("   ```python")
+    print("   pipeline = InferencePipeline()")
+    print("   # Load from the complete model directory")
+    print("   pipeline.load_model(")
+    print("       checkpoint_path='out_gpt2/ckpt.pt',")
+    print("       config_path='out_gpt2/config.yaml'  # Optional, uses defaults if missing")
+    print("   )")
+    print("   text = pipeline.generate('Domain specific prompt')")
+    print("   ```")
+    print()
+    
+    # Web interface usage
+    print("5. Using the web interface:")
+    print("   - Select 'Fine-tune HuggingFace Model' in Training Mode")
+    print("   - Choose model (e.g., gpt2-medium)")
+    print("   - Model Directory auto-fills to 'out_gpt2-medium'")
+    print("   - Upload your domain-specific training data")
+    print("   - Start training")
+    print()
+
+
+def example_10_distributed_training():
+    """Example 10: Distributed training configurations."""
+    print("Example 10: Distributed Training Configurations")
+    print("-" * 50)
+    print("Various distributed training scenarios:\n")
+    
+    # Single node, multiple GPUs
+    print("1. Single machine with 8 GPUs:")
+    print("   torchrun --nproc_per_node=8 -m nanoLLM_gpt.train \\")
+    print("     --data-path large_dataset.txt --out-dir big_model \\")
+    print("     --n-layer 24 --n-head 16 --n-embd 1024 \\")
+    print("     --batch-size 4 --gradient-accumulation-steps 8")
+    print()
+    
+    # Multi-node training
+    print("2. Multi-node training (2 nodes, 4 GPUs each):")
+    print("   # On node 1 (master):")
+    print("   torchrun --nproc_per_node=4 --nnodes=2 --node_rank=0 \\")
+    print("     --master_addr=192.168.1.100 --master_port=29500 \\")
+    print("     -m nanoLLM_gpt.train --data-path data.txt \\")
+    print("     --out-dir distributed_model")
+    print()
+    print("   # On node 2:")
+    print("   torchrun --nproc_per_node=4 --nnodes=2 --node_rank=1 \\")
+    print("     --master_addr=192.168.1.100 --master_port=29500 \\")
+    print("     -m nanoLLM_gpt.train --data-path data.txt \\")
+    print("     --out-dir distributed_model")
+    print()
+    
+    # Mixed precision training
+    print("3. Mixed precision training for memory efficiency:")
+    print("   torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \\")
+    print("     --data-path data.txt --out-dir efficient_model \\")
+    print("     --dtype bfloat16 --compile")
+    print()
+
+
+def example_11_model_directory_usage():
+    """Example 11: Model Directory Organization and Usage.
+    
+    Comprehensive example showing how model directories work for
+    organizing checkpoints, configs, and managing multiple experiments.
+    """
+    print("Example 11: Model Directory Organization")
+    print("-" * 50)
+    print("Best practices for organizing models with directories:\n")
+    
+    # Directory structure
+    print("1. Recommended directory structure:")
+    print("   models/")
+    print("   ├── experiments/")
+    print("   │   ├── baseline_model/")
+    print("   │   │   ├── ckpt.pt")
+    print("   │   │   └── config.yaml")
+    print("   │   └── improved_model/")
+    print("   │       ├── ckpt.pt")
+    print("   │       └── config.yaml")
+    print("   ├── production/")
+    print("   │   └── v1.0/")
+    print("   │       ├── ckpt.pt")
+    print("   │       └── config.yaml")
+    print("   └── finetuned/")
+    print("       ├── out_gpt2/")
+    print("       │   ├── ckpt.pt")
+    print("       │   └── config.yaml")
+    print("       └── out_gpt2-medium/")
+    print("           ├── ckpt.pt")
+    print("           └── config.yaml")
+    print()
+    
+    # Training with organized directories
+    print("2. Training with organized model directories:")
+    print("   # Experiment tracking")
+    print("   gpt-train --data-path data.txt \\")
+    print("     --out-dir models/experiments/run_001_lr_3e4")
+    print()
+    
+    # Loading from directory
+    print("3. Loading models from directories programmatically:")
+    print("   ```python")
+    print("   from nanoLLM_gpt.utils import ModelLoader")
+    print("   ")
+    print("   # Load model from a specific directory")
+    print("   model = ModelLoader.load_model(")
+    print("       checkpoint_path='models/production/v1.0/ckpt.pt',")
+    print("       config_path='models/production/v1.0/config.yaml'")
+    print("   )")
+    print("   ")
+    print("   # Or use with inference pipeline")
+    print("   pipeline = InferencePipeline()")
+    print("   pipeline.load_model(")
+    print("       checkpoint_path='models/experiments/best_model/ckpt.pt'")
+    print("   )")
+    print("   ```")
+    print()
+    
+    # Web interface model directory
+    print("4. Web interface model directory usage:")
+    print("   - Train Model tab: Set 'Model Directory' to organize outputs")
+    print("   - Generate Text tab: Enter model directory path to load both files")
+    print("   - Directory path auto-completes based on training mode")
+    print()
+    
+    # Best practices
+    print("5. Best practices:")
+    print("   - Use descriptive directory names (include hyperparameters)")
+    print("   - Keep checkpoint and config together in same directory")
+    print("   - Version production models (v1.0, v1.1, etc.)")
+    print("   - Separate experiments from production models")
+    print("   - Document each model's purpose in a README within directory")
+    print()
+
+
 def main():
     """Run all examples."""
     examples = [
@@ -227,7 +494,12 @@ def main():
         example_3_chat_completion,
         example_4_model_from_scratch,
         example_5_data_preparation,
-        example_6_streaming_generation
+        example_6_streaming_generation,
+        example_7_training_from_scratch,
+        example_8_resume_training,
+        example_9_finetune_pretrained,
+        example_10_distributed_training,
+        example_11_model_directory_usage
     ]
     
     print("GPT Project - Basic Usage Examples")

@@ -1,6 +1,6 @@
 # nanoLLM_gpt
 
-A clean, modular implementation of GPT (Generative Pre-trained Transformer) with support for training, inference, and serving. This project provides a production-ready codebase with comprehensive documentation, following software engineering best practices.
+A clean, modular implementation of GPT (Generative Pre-trained Transformer) with support for training, fine-tuning, inference, and serving. This project provides a production-ready codebase with comprehensive documentation, following software engineering best practices.
 
 **Note**: This project is built based on [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT/). The codebase has been refactored for modularity, extended with additional features, and enhanced with detailed documentation. So far, developing on the shoulders of giants, this particular repository was developed as a single person project to make it easy for me to create and test new LLM models. Parts of the code were created and reviewed using AI assistants (Claude, ChatGPT, Gemini), and tested manually and iteratively developed in cycles.
 
@@ -16,7 +16,7 @@ A clean, modular implementation of GPT (Generative Pre-trained Transformer) with
 
 - **Modular Architecture**: Clean separation of concerns with dedicated modules for configuration, data handling, training, and inference
 - **Unified Model Loading**: Consistent interface for loading models from checkpoints or HuggingFace
-- **Flexible Training**: Support for single GPU and multi-GPU distributed training with mixed precision
+- **Flexible Training**: Support for single GPU, multi-GPU (DDP), and multi-node distributed training with mixed precision
 - **Multiple Interfaces**: REST API, web UI, and command-line tools
 - **OpenAI-Compatible API**: Drop-in replacement for OpenAI API clients
 - **Configuration Management**: YAML/JSON configuration files with command-line overrides
@@ -26,6 +26,334 @@ A clean, modular implementation of GPT (Generative Pre-trained Transformer) with
 - **Testing Suite**: Unit tests and integration tests with pytest
 
 Refer to **[Technical Handbook](handbook.md)** for comprehensive technical reference.
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- PyTorch 2.0 or higher (for Flash Attention support)
+- CUDA-capable GPU (recommended) or CPU
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/MalayMDas/nanoLLM_gpt.git
+cd nanoLLM_gpt
+
+# Install in development mode
+pip install -e .
+
+# Or install with optional dependencies
+pip install -e ".[dev,datasets,wandb]"
+```
+
+### Development Setup
+
+```bash
+# Install all development dependencies
+pip install -e ".[dev,datasets,wandb]"
+
+# Run tests to verify installation
+pytest
+```
+
+## Quick Start
+
+### 1. Generate Text
+
+Using the command-line interface:
+
+```bash
+# Generate from HuggingFace model
+gpt-generate --model gpt2 --prompt "Once upon a time"
+
+# Generate from checkpoint
+gpt-generate --checkpoint out/ckpt.pt --prompt "The future of AI"
+
+# Interactive mode
+gpt-generate --model gpt2 --interactive
+```
+
+### 2. Train a Model
+
+```bash
+# Train from scratch
+gpt-train --data-path input.txt --max-iters 5000
+
+# Train with configuration file
+gpt-train --config config/train_config.yaml
+
+# Resume training from checkpoint (auto-loads saved config. The data comes from uploads folder)
+gpt-train --init-from resume --out-dir models/my_model
+
+# Resume training with new data
+gpt-train --init-from resume --out-dir models/my_model --data-path new_data.txt
+
+# Fine-tune pretrained model (auto-creates model directory)
+gpt-train --init-from gpt2 --data-path domain_data.txt
+# Creates: out_gpt2/ckpt.pt and out_gpt2/config.yaml
+
+# Fine-tune with custom model directory
+gpt-train --init-from gpt2-medium --data-path domain_data.txt \
+  --out-dir models/finetuned/gpt2_medical --learning-rate 3e-5
+
+# Multi-GPU training (single node)
+torchrun --nproc_per_node=4 -m nanoLLM_gpt.train --config config/train_config.yaml
+
+# Multi-node training (2 nodes with 8 GPUs each)
+# On master node:
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 \
+  --master_addr=192.168.1.100 --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml
+
+# On worker node:
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 \
+  --master_addr=192.168.1.100 --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml
+```
+
+### 3. Start the Server
+
+```bash
+# Start with default configuration
+gpt-server
+
+# Start with custom configuration
+gpt-server --config config/server_config.yaml
+
+# Start with specific model
+gpt-server --checkpoint out/ckpt.pt --port 8080
+```
+
+### 4. Running provided examples
+
+```bash
+# Runs provided example code
+python examples/basic_usage.py
+```
+
+### 5. Fine-tuning HuggingFace Models
+
+The web interface now supports fine-tuning pre-trained HuggingFace models:
+
+1. Start the server: `gpt-server`
+2. Navigate to the "Train Model" tab
+3. Select "Fine-tune HuggingFace Model"
+4. Choose a model (GPT-2, GPT-2 Medium, Large, or XL)
+5. Upload your domain-specific training data
+6. Configure training parameters
+7. Start training
+
+Fine-tuned models will be saved to `out_<model_name>` (e.g., `out_gpt2-medium`)
+## Configuration
+
+### Training Configuration
+
+Create a `train_config.yaml` file:
+
+```yaml
+model:
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  block_size: 1024
+
+data_path: path/to/data.txt
+max_iters: 100000
+learning_rate: 6.0e-4
+batch_size: 12
+
+# Distributed training settings (optional)
+backend: nccl  # nccl for GPU, gloo for CPU
+# These are typically set via torchrun, but can be configured here
+# nproc_per_node: 4
+# nnodes: 1
+# master_addr: localhost
+# master_port: 29500
+```
+
+### Server Configuration
+
+Create a `server_config.yaml` file:
+
+```yaml
+host: 0.0.0.0
+port: 8080
+model_type: gpt2
+device: cuda
+dtype: auto
+```
+
+## Model Directory Organization
+
+The project uses a **Model Directory** approach for organizing trained models. Each model directory contains both the checkpoint (`ckpt.pt`) and configuration (`config.yaml`) files together, making model management simpler and more organized.
+
+### Using Model Directories
+
+#### Training with Custom Directory
+```bash
+# Specify a custom model directory for organization
+gpt-train --data-path data.txt --out-dir models/experiments/run_001
+
+# The model will be saved to:
+# - models/experiments/run_001/ckpt.pt
+# - models/experiments/run_001/config.yaml
+```
+
+#### Loading from Model Directory
+```python
+from nanoLLM_gpt.utils import InferencePipeline
+
+pipeline = InferencePipeline()
+# Load using model directory - both files are found automatically
+pipeline.load_model(
+    checkpoint_path='models/production/v1.0/ckpt.pt',
+    config_path='models/production/v1.0/config.yaml'
+)
+```
+
+#### Web Interface
+- **Train Model Tab**: The "Model Directory" field specifies where to save outputs
+- **Generate Text Tab**: Enter the model directory path to load both checkpoint and config
+
+### Automatic Directory Naming
+
+When fine-tuning HuggingFace models, directories are automatically named:
+- `gpt2` → `out_gpt2/`
+- `gpt2-medium` → `out_gpt2-medium/`
+- `gpt2-large` → `out_gpt2-large/`
+- `gpt2-xl` → `out_gpt2-xl/`
+
+## API Usage
+
+The server provides an OpenAI-compatible API:
+
+### Python Example
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="not-needed"
+)
+
+# Chat completion
+response = client.chat.completions.create(
+    model="gpt",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Write a haiku about programming."}
+    ]
+)
+
+# Text completion
+response = client.completions.create(
+    model="gpt",
+    prompt="Once upon a time",
+    max_tokens=100,
+    temperature=0.8
+)
+```
+
+### Curl Example
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "temperature": 0.8,
+    "max_tokens": 100
+  }'
+```
+
+## Web Interface
+
+Access the web interface at `http://localhost:8080` after starting the server. 
+
+### Features
+
+- **Text Generation**: Interactive text generation with adjustable parameters
+  - Load models from HuggingFace or custom Model Directories
+  - Single "Model Directory" field for easy model loading
+  - Real-time generation with customizable parameters
+  
+- **Model Training**: Start and monitor training jobs
+  - **Model Directory** field for organized output storage
+  - Three training modes:
+    - New Training: Train from scratch with custom directory
+    - Resume Training: Continue from existing model directory
+    - Fine-tune HuggingFace: Auto-generates directories like `out_gpt2`
+  - Real-time training logs and status updates
+  - Support for distributed training (DDP)
+  
+- **API Documentation**: Built-in API reference with examples
+
+## Advanced Usage
+
+### Custom Data Preparation
+
+```python
+from nanoLLM_gpt.utils import DataPreparer
+
+preparer = DataPreparer()
+data_dir = preparer.prepare_data(
+    data_path="https://example.com/data.txt",
+    train_val_split=0.001
+)
+```
+
+### Programmatic Model Loading
+
+```python
+from nanoLLM_gpt.utils import ModelLoader
+
+# Load from checkpoint
+model = ModelLoader.load_model(
+    checkpoint_path="out/ckpt.pt",
+    device="cuda",
+    compile=True
+)
+
+# Load from HuggingFace
+model = ModelLoader.load_model(
+    model_type="gpt2-large",
+    device="cuda"
+)
+```
+
+### Custom Inference Pipeline
+
+```python
+from nanoLLM_gpt.utils import InferencePipeline
+from nanoLLM_gpt.config import GenerationConfig
+
+# Initialize pipeline
+pipeline = InferencePipeline(device="cuda")
+pipeline.load_model(model_type="gpt2")
+
+# Generate with custom config
+config = GenerationConfig(
+    max_new_tokens=200,
+    temperature=0.9,
+    top_p=0.95
+)
+
+text = pipeline.generate("Once upon a time", config)
+```
+
+## Development
+
+### Running Tests
+
+```bash
+pytest tests/
+```
+
 
 ## Project Structure
 
@@ -127,239 +455,6 @@ Additional Files (when created):
     └── server.log              # API server logs
 ```
 
-## Installation
-
-### Prerequisites
-
-- Python 3.8 or higher
-- PyTorch 2.0 or higher (for Flash Attention support)
-- CUDA-capable GPU (recommended) or CPU
-
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/MalayMDas/nanoLLM_gpt.git
-cd nanoLLM_gpt
-
-# Install in development mode
-pip install -e .
-
-# Or install with optional dependencies
-pip install -e ".[dev,datasets,wandb]"
-```
-
-### Development Setup
-
-```bash
-# Install all development dependencies
-pip install -e ".[dev,datasets,wandb]"
-
-# Run tests to verify installation
-pytest tests/
-
-# Run code quality checks
-black nanoLLM_gpt/
-flake8 nanoLLM_gpt/
-mypy nanoLLM_gpt/
-```
-
-## Quick Start
-
-### 1. Generate Text
-
-Using the command-line interface:
-
-```bash
-# Generate from HuggingFace model
-gpt-generate --model gpt2 --prompt "Once upon a time"
-
-# Generate from checkpoint
-gpt-generate --checkpoint out/ckpt.pt --prompt "The future of AI"
-
-# Interactive mode
-gpt-generate --model gpt2 --interactive
-```
-
-### 2. Train a Model
-
-```bash
-# Train from scratch
-gpt-train --data-path input.txt --max-iters 5000
-
-# Train with configuration file
-gpt-train --config config/train_config.yaml
-
-# Resume training
-gpt-train --init-from resume --out-dir out
-
-# Multi-GPU training
-torchrun --nproc_per_node=4 gpt-train --config config/train_config.yaml
-```
-
-### 3. Start the Server
-
-```bash
-# Start with default configuration
-gpt-server
-
-# Start with custom configuration
-gpt-server --config config/server_config.yaml
-
-# Start with specific model
-gpt-server --checkpoint out/ckpt.pt --port 8080
-```
-
-### 4. Running provided examples
-
-```bash
-# Runs provided example code
-python examples/basic_usage.py
-```
-## Configuration
-
-### Training Configuration
-
-Create a `train_config.yaml` file:
-
-```yaml
-model:
-  n_layer: 12
-  n_head: 12
-  n_embd: 768
-  block_size: 1024
-
-data_path: path/to/data.txt
-max_iters: 100000
-learning_rate: 6.0e-4
-batch_size: 12
-```
-
-### Server Configuration
-
-Create a `server_config.yaml` file:
-
-```yaml
-host: 0.0.0.0
-port: 8080
-model_type: gpt2
-device: cuda
-dtype: auto
-```
-
-## API Usage
-
-The server provides an OpenAI-compatible API:
-
-### Python Example
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8080/v1",
-    api_key="not-needed"
-)
-
-# Chat completion
-response = client.chat.completions.create(
-    model="gpt",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Write a haiku about programming."}
-    ]
-)
-
-# Text completion
-response = client.completions.create(
-    model="gpt",
-    prompt="Once upon a time",
-    max_tokens=100,
-    temperature=0.8
-)
-```
-
-### Curl Example
-
-```bash
-curl http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "temperature": 0.8,
-    "max_tokens": 100
-  }'
-```
-
-## Web Interface
-
-Access the web interface at `http://localhost:8080` after starting the server. Features include:
-
-- **Text Generation**: Interactive text generation with adjustable parameters
-- **Model Training**: Start and monitor training jobs
-- **API Documentation**: Built-in API reference
-
-## Advanced Usage
-
-### Custom Data Preparation
-
-```python
-from nanoLLM_gpt.utils import DataPreparer
-
-preparer = DataPreparer()
-data_dir = preparer.prepare_data(
-    data_path="https://example.com/data.txt",
-    train_val_split=0.001
-)
-```
-
-### Programmatic Model Loading
-
-```python
-from nanoLLM_gpt.utils import ModelLoader
-
-# Load from checkpoint
-model = ModelLoader.load_model(
-    checkpoint_path="out/ckpt.pt",
-    device="cuda",
-    compile=True
-)
-
-# Load from HuggingFace
-model = ModelLoader.load_model(
-    model_type="gpt2-large",
-    device="cuda"
-)
-```
-
-### Custom Inference Pipeline
-
-```python
-from nanoLLM_gpt.utils import InferencePipeline
-from nanoLLM_gpt.config import GenerationConfig
-
-# Initialize pipeline
-pipeline = InferencePipeline(device="cuda")
-pipeline.load_model(model_type="gpt2")
-
-# Generate with custom config
-config = GenerationConfig(
-    max_new_tokens=200,
-    temperature=0.9,
-    top_p=0.95
-)
-
-text = pipeline.generate("Once upon a time", config)
-```
-
-## Development
-
-### Running Tests
-
-```bash
-pytest tests/
-```
 
 ## Model Architecture
 
@@ -411,10 +506,13 @@ model:
    - Clear GPU cache periodically: `torch.cuda.empty_cache()`
 
 3. **Training Optimization**
-   - Use distributed training for large models: `torchrun --nproc_per_node=4`
+   - Use distributed training for large models:
+     - Single node: `torchrun --nproc_per_node=4 -m nanoLLM_gpt.train`
+     - Multi-node: See [Distributed Training](#distributed-training) section
    - Enable data loading optimizations with pinned memory
    - Adjust `num_workers` for data loading based on CPU cores
    - Use larger batch sizes with gradient accumulation for stability
+   - Consider gradient accumulation for effective larger batch sizes
 
 4. **Inference Optimization**
    - Compile models for inference: `model = torch.compile(model)`
@@ -451,7 +549,45 @@ response = client.chat.completions.create(
 )
 ```
 
-### 3. Batch Text Generation
+### 3. Resume Training and Model Loading
+
+#### Resume Training with Model Directories
+
+```bash
+# Resume from model directory - automatically loads config.yaml
+gpt-train --init-from resume --out-dir models/my_experiment
+
+# Resume with different hyperparameters (overrides saved config)
+gpt-train --init-from resume --out-dir models/my_experiment \
+  --learning-rate 1e-4 --max-iters 10000
+
+# Resume with new training data
+gpt-train --init-from resume --out-dir models/my_experiment \
+  --data-path new_corpus.txt
+
+# Fine-tune HuggingFace model with automatic directory
+gpt-train --init-from gpt2-medium --data-path custom_data.txt
+# Creates: out_gpt2-medium/ckpt.pt and out_gpt2-medium/config.yaml
+```
+
+#### Loading Models in Web Interface
+
+The web interface has been updated with Model Directory support:
+
+**Train Model Tab:**
+- **Model Directory**: Unified field for specifying where to save checkpoint and config
+- Automatically updates based on training mode:
+  - New Training: Customizable, defaults to "out"
+  - Resume Training: Locked to checkpoint directory
+  - Fine-tune HuggingFace: Auto-generates like "out_gpt2-medium"
+
+**Generate Text Tab:**
+- **Model Directory**: Single field to specify directory containing both files
+- Example: Enter `models/production/v1.0` to load:
+  - `models/production/v1.0/ckpt.pt`
+  - `models/production/v1.0/config.yaml`
+
+### 4. Batch Text Generation
 
 ```python
 from nanoLLM_gpt.utils import InferencePipeline
@@ -497,6 +633,80 @@ for i, sample in enumerate(samples):
 - Ensure package is installed: `pip install -e .`
 - Check Python path includes the project directory
 - Verify all dependencies are installed: `pip install -r requirements.txt`
+
+## Distributed Training
+
+### Multi-GPU Training (Single Node)
+
+For training on multiple GPUs on a single machine:
+
+```bash
+# Train on 4 GPUs
+torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \
+  --data-path data.txt --out-dir out_multi_gpu
+
+# With configuration file
+torchrun --nproc_per_node=4 -m nanoLLM_gpt.train \
+  --config config/train_config.yaml
+```
+
+### Multi-Node Training
+
+For distributed training across multiple machines:
+
+```bash
+# On master node (node rank 0)
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 \
+  --master_addr=192.168.1.100 --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml
+
+# On worker node (node rank 1)
+torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 \
+  --master_addr=192.168.1.100 --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml
+```
+
+### SLURM Cluster
+
+For SLURM-managed clusters:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=gpt_training
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=8
+#SBATCH --ntasks-per-node=8
+
+srun torchrun \
+  --nproc_per_node=$SLURM_GPUS_PER_NODE \
+  --nnodes=$SLURM_NNODES \
+  --node_rank=$SLURM_NODEID \
+  --master_addr=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) \
+  --master_port=29500 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml
+```
+
+### Web Interface DDP Support
+
+The web interface includes distributed training support:
+1. Navigate to "Train Model" tab
+2. Enable "Distributed Training" section
+3. Configure:
+   - Backend (NCCL for GPU, Gloo for CPU)
+   - Number of processes per node
+   - Number of nodes (for multi-node)
+   - Master address and port
+
+### Important Notes for Distributed Training
+
+- **Effective Batch Size**: `batch_size × gradient_accumulation_steps × world_size`
+- **Learning Rate Scaling**: Consider scaling learning rate with world size
+- **Data Sharding**: Each process automatically loads its own data shard
+- **Checkpointing**: Only the master process (rank 0) saves checkpoints
+- **Backend Selection**: Use NCCL for GPUs (much faster than Gloo)
+- **Environment**: Ensure all nodes have identical environment and code
+- **Network**: For multi-node, ensure network connectivity between nodes
+- **Debugging**: Set `NCCL_DEBUG=INFO` for debugging distributed issues
 
 ## Testing
 

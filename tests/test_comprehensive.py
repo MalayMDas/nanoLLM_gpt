@@ -27,6 +27,9 @@ from nanoLLM_gpt.model import GPT
 from nanoLLM_gpt.config import ModelConfig, TrainingConfig, ConfigLoader
 from nanoLLM_gpt.utils import DataPreparer, DataLoader, ModelLoader
 
+# Import GPU check decorators from conftest
+from tests.conftest import requires_gpu, requires_multigpu
+
 
 class TestTraining:
     """Test cases for model training functionality."""
@@ -390,6 +393,130 @@ class TestDataUtils:
             
             assert Path(data_dir, "train.bin").exists()
             assert Path(data_dir, "val.bin").exists()
+
+
+class TestModelDirectory:
+    """Test Model Directory organization and functionality.
+    
+    The Model Directory feature provides a unified location for storing
+    both checkpoint and configuration files, making model management easier.
+    """
+    
+    @pytest.fixture
+    def tiny_data_dir(self):
+        """Create a tiny dataset for testing."""
+        # Create temporary directory
+        temp_dir = tempfile.mkdtemp()
+        data_dir = Path(temp_dir) / "tiny_test"
+        data_dir.mkdir(parents=True)
+        
+        # Create a small text file with enough data
+        text_file = Path(temp_dir) / "tiny_data.txt"
+        # Need more text to meet minimum token requirements
+        text = "Hello world. This is a test. " * 500  # Larger text for testing
+        text_file.write_text(text)
+        
+        # Prepare the data with a larger validation split for testing
+        preparer = DataPreparer()
+        preparer.prepare_data(str(text_file), output_dir=str(data_dir), train_val_split=0.1)
+        
+        yield str(text_file), str(data_dir)
+        
+        # Cleanup
+        shutil.rmtree(temp_dir)
+    
+    def test_model_directory_creation(self, tiny_data_dir):
+        """Test that training creates proper Model Directory structure."""
+        text_file, data_dir = tiny_data_dir
+        
+        # Create a structured model directory path
+        model_dir = Path(data_dir) / "models" / "experiment_001"
+        
+        # Run training with Model Directory
+        cmd = [
+            "gpt-train",
+            f"--data-path={text_file}",
+            f"--out-dir={model_dir}",  # Specify Model Directory
+            "--max-iters=5",
+            "--eval-interval=1",  # Evaluate every iteration to force checkpoint
+            "--n-layer=2",
+            "--n-head=2",
+            "--n-embd=64",
+            "--block-size=32",  # Very small block size for testing
+            "--batch-size=2",
+            "--train-val-split=0.1",  # Larger validation split
+            "--always-save-checkpoint=True"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, f"Training failed: {result.stderr}"
+        
+        # Verify Model Directory structure
+        assert model_dir.exists(), f"Model Directory not created: {model_dir}"
+        assert (model_dir / "ckpt.pt").exists(), "Checkpoint not in Model Directory"
+        assert (model_dir / "config.yaml").exists(), "Config not in Model Directory"
+        
+        # Verify files are co-located
+        checkpoint_parent = (model_dir / "ckpt.pt").parent
+        config_parent = (model_dir / "config.yaml").parent
+        assert checkpoint_parent == config_parent == model_dir, \
+            "Checkpoint and config should be in the same Model Directory"
+    
+    def test_load_from_model_directory(self, tiny_data_dir):
+        """Test loading model using Model Directory paths."""
+        text_file, data_dir = tiny_data_dir
+        model_dir = Path(data_dir) / "test_model"
+        
+        # First train a model to create the directory
+        cmd = [
+            "gpt-train",
+            f"--data-path={text_file}",
+            f"--out-dir={model_dir}",
+            "--max-iters=5",
+            "--eval-interval=1",  # Evaluate and save every iteration
+            "--n-layer=2",
+            "--n-head=2",
+            "--n-embd=64",
+            "--block-size=32",  # Very small block size for testing
+            "--batch-size=2",
+            "--train-val-split=0.1",  # Larger validation split
+            "--always-save-checkpoint=True"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # Check if training succeeded and checkpoint was created
+        assert result.returncode == 0, f"Training failed: {result.stderr}"
+        assert (model_dir / "ckpt.pt").exists(), f"Checkpoint not found in {model_dir}"
+        assert (model_dir / "config.yaml").exists(), f"Config not found in {model_dir}"
+        
+        # Test loading with ModelLoader using Model Directory paths
+        from nanoLLM_gpt.utils import ModelLoader
+        
+        # ModelLoader loads from checkpoint which should contain model config
+        model = ModelLoader.load_model(
+            checkpoint_path=str(model_dir / "ckpt.pt"),
+            device='cpu'
+        )
+        
+        assert model is not None, "Failed to load model from Model Directory"
+        assert model.config.n_layer == 2, "Model config not loaded correctly"
+    
+    def test_huggingface_model_directory_naming(self):
+        """Test automatic Model Directory naming for HuggingFace models."""
+        # Test the naming convention for HuggingFace fine-tuning
+        test_cases = [
+            ("gpt2", "out_gpt2"),
+            ("gpt2-medium", "out_gpt2-medium"),
+            ("gpt2-large", "out_gpt2-large"),
+            ("gpt2-xl", "out_gpt2-xl")
+        ]
+        
+        for model_name, expected_dir in test_cases:
+            # When fine-tuning HuggingFace models without specifying out_dir,
+            # the directory should follow the pattern out_<model_name>
+            assert f"out_{model_name}" == expected_dir, \
+                f"Expected directory name {expected_dir} for model {model_name}"
 
 
 def run_all_tests():

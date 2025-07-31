@@ -426,11 +426,11 @@
                 </div>
 
                 <div id="checkpoint-input" class="form-group" style="display: none;">
-                    <label for="checkpoint-path">Checkpoint Path or URL</label>
-                    <input type="text" id="checkpoint-path" placeholder="e.g., out/ckpt.pt or http://example.com/model.pt">
-                    
-                    <label for="config-path" style="margin-top: 1rem;">Config File Path or URL (Optional)</label>
-                    <input type="text" id="config-path" placeholder="e.g., out/config.yaml or http://example.com/config.yaml">
+                    <label for="model-dir-generate">Model Directory</label>
+                    <input type="text" id="model-dir-generate" placeholder="e.g., out or models/my_model">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Directory containing ckpt.pt and config.yaml files
+                    </p>
                     
                     <button onclick="loadModel()" style="margin-top: 0.5rem;">Load Model</button>
                 </div>
@@ -497,7 +497,65 @@
         <!-- Train Tab -->
         <div id="train-tab" class="tab-content">
             <div class="card">
-                <h2>Training Data</h2>
+                <h2>Training Setup</h2>
+                
+                <h3>Training Mode</h3>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="train-new" name="train-mode" value="new" checked onchange="toggleTrainingMode()">
+                        <label for="train-new">New Training</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="train-resume" name="train-mode" value="resume" onchange="toggleTrainingMode()">
+                        <label for="train-resume">Resume from Checkpoint</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="train-huggingface" name="train-mode" value="huggingface" onchange="toggleTrainingMode()">
+                        <label for="train-huggingface">Fine-tune HuggingFace Model</label>
+                    </div>
+                </div>
+
+                <div id="resume-options" class="form-group" style="display: none;">
+                    <label for="checkpoint-dir">Checkpoint Directory</label>
+                    <input type="text" id="checkpoint-dir" placeholder="e.g., out or models/my_model">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Directory containing ckpt.pt and config.yaml from previous training
+                    </p>
+                </div>
+
+                <div id="huggingface-options" class="form-group" style="display: none;">
+                    <label for="hf-model-select">HuggingFace Model</label>
+                    <select id="hf-model-select" onchange="updateOutputDir()">
+                        <option value="gpt2">GPT-2 (124M)</option>
+                        <option value="gpt2-medium">GPT-2 Medium (350M)</option>
+                        <option value="gpt2-large">GPT-2 Large (774M)</option>
+                        <option value="gpt2-xl">GPT-2 XL (1.5B)</option>
+                    </select>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Pre-trained model weights will be downloaded from HuggingFace
+                    </p>
+                    <p id="output-dir-info" style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Checkpoints will be saved to: <strong>out_gpt2</strong>
+                    </p>
+                </div>
+
+                <div class="divider"></div>
+
+                <h3>Model Directory</h3>
+                <div class="form-group">
+                    <label for="model-directory">Output Directory for Model</label>
+                    <input type="text" id="model-directory" placeholder="e.g., out or models/my_model" value="out">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Directory where checkpoint (ckpt.pt) and configuration (config.yaml) will be saved
+                    </p>
+                </div>
+
+                <div class="divider"></div>
+
+                <h3 id="training-data-header">Training Data</h3>
+                <p class="resume-note" style="display: none; color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                    Leave empty to continue with the original training data
+                </p>
                 
                 <div class="radio-group">
                     <div class="radio-option">
@@ -513,16 +571,19 @@
                 <div id="file-input" class="form-group">
                     <label for="training-file">Training Data File</label>
                     <input type="file" id="training-file" accept=".txt">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Note: Files are uploaded to the server for processing
+                    </p>
                 </div>
 
                 <div id="url-input" class="form-group" style="display: none;">
                     <label for="training-url">Data URL</label>
                     <input type="text" id="training-url" placeholder="https://example.com/training_data.txt">
                 </div>
-            </div>
 
-            <div class="card">
-                <h2>Configuration File (Optional)</h2>
+                <div class="divider"></div>
+
+                <h3>Configuration File (Optional)</h3>
                 <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
                     Upload a YAML or JSON configuration file. Parameters in the file will be used as defaults, 
                     but any values you set in the form below will take precedence.
@@ -558,6 +619,15 @@
                     </div>
                 </div>
 
+                <h3>Data Configuration</h3>
+                <div class="form-group">
+                    <label for="train-val-split">Train/Validation Split</label>
+                    <input type="number" id="train-val-split" value="0.0005" min="0.0001" max="0.5" step="0.0001">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Fraction of data to use for validation (e.g., 0.1 = 10% validation, 90% training)
+                    </p>
+                </div>
+
                 <h3>Model Architecture</h3>
                 <div class="grid">
                     <div class="form-group">
@@ -578,6 +648,69 @@
                     <div class="form-group">
                         <label for="block-size">Block Size</label>
                         <input type="number" id="block-size" value="1024" min="128">
+                    </div>
+                </div>
+
+                <h3>Performance Optimization</h3>
+                <div class="form-group">
+                    <label for="compile-enabled">
+                        <input type="checkbox" id="compile-enabled" style="width: auto; margin-right: 0.5rem;">
+                        Enable PyTorch Compile (torch.compile)
+                    </label>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Requires PyTorch 2.0+. Compiles the model for ~30% faster training. First iteration will be slower due to compilation.
+                    </p>
+                </div>
+
+                <h3>Distributed Training (Multi-GPU)</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="backend">Backend</label>
+                        <select id="backend">
+                            <option value="nccl" selected>NCCL (NVIDIA GPUs)</option>
+                            <option value="gloo">Gloo (CPU/GPU)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ddp-enabled">Enable Distributed Training</label>
+                        <input type="checkbox" id="ddp-enabled" onchange="toggleDDPOptions()" style="width: auto;">
+                    </div>
+                </div>
+
+                <div id="ddp-options" style="display: none;">
+                    <div class="grid">
+                        <div class="form-group">
+                            <label for="nproc-per-node">GPUs per Node</label>
+                            <input type="number" id="nproc-per-node" value="4" min="1" max="8">
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                                Number of GPUs to use on this machine
+                            </p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="nnodes">Number of Nodes</label>
+                            <input type="number" id="nnodes" value="1" min="1">
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                                Number of machines for distributed training (usually 1)
+                            </p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="master-addr">Master Address</label>
+                            <input type="text" id="master-addr" value="127.0.0.1" placeholder="127.0.0.1">
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                                IP address of the master node (use 127.0.0.1 for single machine)
+                            </p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="master-port">Master Port</label>
+                            <input type="number" id="master-port" value="29500" min="1024" max="65535">
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                                Port for distributed communication
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -701,6 +834,7 @@ response = client.chat.completions.create(
             document.getElementById('current-model-info').style.display = 
                 modelSource === 'current' ? 'block' : 'none';
         }
+        
 
         function toggleDataInput() {
             const dataSource = document.querySelector('input[name="data-source"]:checked').value;
@@ -709,6 +843,98 @@ response = client.chat.completions.create(
                 dataSource === 'file' ? 'block' : 'none';
             document.getElementById('url-input').style.display = 
                 dataSource === 'url' ? 'block' : 'none';
+        }
+
+        /**
+         * Toggle training mode UI and update Model Directory field
+         * 
+         * This function handles the training mode selection (new/resume/finetune)
+         * and automatically updates the Model Directory field based on the selection.
+         * - New Training: Allows custom directory, defaults to 'out'
+         * - Resume Training: Locks directory to match checkpoint location
+         * - Fine-tune HuggingFace: Auto-generates directory name like 'out_gpt2'
+         */
+        function toggleTrainingMode() {
+            const trainMode = document.querySelector('input[name="train-mode"]:checked').value;
+            const modelDirInput = document.getElementById('model-directory');
+            
+            // Show/hide relevant options based on training mode
+            document.getElementById('resume-options').style.display = 
+                trainMode === 'resume' ? 'block' : 'none';
+            document.getElementById('huggingface-options').style.display = 
+                trainMode === 'huggingface' ? 'block' : 'none';
+            
+            // Update Model Directory field based on training mode
+            if (trainMode === 'resume') {
+                // For resume mode: Model Directory must match the checkpoint directory
+                // This ensures we continue training in the same location
+                const checkpointDir = document.getElementById('checkpoint-dir').value.trim();
+                if (checkpointDir) {
+                    modelDirInput.value = checkpointDir;
+                }
+                modelDirInput.disabled = true; // Prevent editing to avoid confusion
+            } else if (trainMode === 'huggingface') {
+                // For HuggingFace fine-tuning: Auto-generate directory name
+                // Pattern: out_<model_name> for easy identification
+                const hfModel = document.getElementById('hf-model-select').value;
+                modelDirInput.value = `out_${hfModel}`;
+                modelDirInput.disabled = false; // Allow customization if needed
+            } else {
+                // For new training: Allow full customization
+                modelDirInput.value = 'out'; // Default directory
+                modelDirInput.disabled = false;
+            }
+            
+            // Update training data requirements
+            const dataHeader = document.getElementById('training-data-header');
+            const resumeNote = document.querySelector('.resume-note');
+            
+            if (trainMode === 'resume') {
+                dataHeader.textContent = 'Training Data (Optional)';
+                resumeNote.style.display = 'block';
+                resumeNote.textContent = 'Leave empty to continue with the original training data';
+            } else if (trainMode === 'huggingface') {
+                dataHeader.textContent = 'Fine-tuning Data (Required)';
+                resumeNote.style.display = 'block';
+                resumeNote.textContent = 'Provide domain-specific data to fine-tune the pre-trained model';
+            } else {
+                dataHeader.textContent = 'Training Data';
+                resumeNote.style.display = 'none';
+            }
+        }
+        
+        function toggleDDPOptions() {
+            const ddpEnabled = document.getElementById('ddp-enabled').checked;
+            document.getElementById('ddp-options').style.display = ddpEnabled ? 'block' : 'none';
+        }
+        
+        /**
+         * Update output directory display when HuggingFace model selection changes
+         * 
+         * This function synchronizes the Model Directory field with the selected
+         * HuggingFace model. It follows the naming convention: out_<model_name>
+         * to help organize fine-tuned models by their base model.
+         */
+        function updateOutputDir() {
+            const modelSelect = document.getElementById('hf-model-select');
+            const outputDirInfo = document.getElementById('output-dir-info');
+            const modelDirInput = document.getElementById('model-directory');
+            const trainMode = document.querySelector('input[name="train-mode"]:checked').value;
+            
+            if (trainMode === 'huggingface' && modelSelect) {
+                const selectedModel = modelSelect.value;
+                const modelDir = `out_${selectedModel}`;
+                
+                // Update the info text to show where files will be saved
+                if (outputDirInfo) {
+                    outputDirInfo.innerHTML = `Checkpoints will be saved to: <strong>${modelDir}</strong>`;
+                }
+                
+                // Update the Model Directory input field
+                if (modelDirInput) {
+                    modelDirInput.value = modelDir;
+                }
+            }
         }
 
         async function updateModelInfo() {
@@ -732,10 +958,21 @@ response = client.chat.completions.create(
             }
         }
 
+        /**
+         * Load a model for text generation
+         * 
+         * Handles two loading modes:
+         * 1. HuggingFace: Load pretrained models (gpt2, gpt2-medium, etc.)
+         * 2. Checkpoint: Load from a Model Directory containing ckpt.pt and config.yaml
+         * 
+         * The Model Directory approach simplifies loading by requiring only one path
+         * instead of separate checkpoint and config paths.
+         */
         async function loadModel() {
             const modelSource = document.querySelector('input[name="model-source"]:checked').value;
             
             if (modelSource === 'huggingface') {
+                // Load a pretrained HuggingFace model
                 const requestData = {
                     model_type: document.getElementById('hf-model-select').value
                 };
@@ -759,22 +996,19 @@ response = client.chat.completions.create(
                     alert('Error loading model: ' + error);
                 }
             } else if (modelSource === 'checkpoint') {
-                // Get paths from text inputs
-                const checkpointPath = document.getElementById('checkpoint-path').value;
-                const configPath = document.getElementById('config-path').value;
+                // Load from Model Directory
+                // The directory should contain both ckpt.pt and config.yaml
+                const modelDir = document.getElementById('model-dir-generate').value.trim();
                 
-                if (!checkpointPath) {
-                    alert('Please provide a checkpoint path or URL');
+                if (!modelDir) {
+                    alert('Please provide a model directory');
                     return;
                 }
                 
-                // Use FormData for consistency with server endpoint
+                // Construct full paths from the Model Directory
                 const formData = new FormData();
-                formData.append('checkpoint_path', checkpointPath);
-                
-                if (configPath) {
-                    formData.append('config_path', configPath);
-                }
+                formData.append('checkpoint_path', modelDir + '/ckpt.pt');
+                formData.append('config_path', modelDir + '/config.yaml');  // Optional but recommended
                 
                 try {
                     const response = await fetch('/api/model/load', {
@@ -832,24 +1066,86 @@ response = client.chat.completions.create(
             }
         }
 
+        /**
+         * Start model training with the configured parameters
+         * 
+         * This function collects all training parameters including the Model Directory
+         * where both checkpoint (ckpt.pt) and configuration (config.yaml) will be saved.
+         * The Model Directory helps organize multiple experiments and models.
+         */
         async function startTraining() {
+            const trainMode = document.querySelector('input[name="train-mode"]:checked').value;
             const dataSource = document.querySelector('input[name="data-source"]:checked').value;
             const formData = new FormData();
             
-            if (dataSource === 'file') {
-                const fileInput = document.getElementById('training-file');
-                if (!fileInput.files[0]) {
-                    alert('Please select a training file');
+            // Get Model Directory - the unified location for saving model outputs
+            const modelDirectory = document.getElementById('model-directory').value.trim();
+            
+            // Handle training mode
+            if (trainMode === 'resume') {
+                const checkpointDir = document.getElementById('checkpoint-dir').value.trim();
+                if (!checkpointDir) {
+                    alert('Please specify the checkpoint directory to resume from');
                     return;
                 }
-                formData.append('file', fileInput.files[0]);
+                formData.append('init_from', 'resume');
+                formData.append('out_dir', checkpointDir);
+                
+                // For resume mode, data is optional
+                if (dataSource === 'file' && document.getElementById('training-file').files[0]) {
+                    formData.append('file', document.getElementById('training-file').files[0]);
+                } else if (dataSource === 'url' && document.getElementById('training-url').value) {
+                    formData.append('url', document.getElementById('training-url').value);
+                }
+            } else if (trainMode === 'huggingface') {
+                // Fine-tune from HuggingFace model
+                const hfModel = document.getElementById('hf-model-select').value;
+                formData.append('init_from', hfModel);
+                
+                // Use model directory for output
+                if (modelDirectory) {
+                    formData.append('out_dir', modelDirectory);
+                }
+                
+                // Data is required for fine-tuning
+                if (dataSource === 'file') {
+                    const fileInput = document.getElementById('training-file');
+                    if (!fileInput.files[0]) {
+                        alert('Please select training data for fine-tuning');
+                        return;
+                    }
+                    formData.append('file', fileInput.files[0]);
+                } else {
+                    const url = document.getElementById('training-url').value;
+                    if (!url) {
+                        alert('Please enter a data URL for fine-tuning');
+                        return;
+                    }
+                    formData.append('url', url);
+                }
             } else {
-                const url = document.getElementById('training-url').value;
-                if (!url) {
-                    alert('Please enter a data URL');
-                    return;
+                // New training - use model directory for output
+                if (modelDirectory) {
+                    formData.append('out_dir', modelDirectory);
                 }
-                formData.append('url', url);
+                
+                // Data is required for new training
+                if (dataSource === 'file') {
+                    const fileInput = document.getElementById('training-file');
+                    if (!fileInput.files[0]) {
+                        alert('Please select a training file');
+                        return;
+                    }
+                    formData.append('file', fileInput.files[0]);
+                } else {
+                    const url = document.getElementById('training-url').value;
+                    if (!url) {
+                        alert('Please enter a data URL');
+                        return;
+                    }
+                    formData.append('url', url);
+                }
+                formData.append('init_from', 'scratch');
             }
             
             // Check for config file upload
@@ -866,8 +1162,21 @@ response = client.chat.completions.create(
                 n_layer: parseInt(document.getElementById('n-layer').value),
                 n_head: parseInt(document.getElementById('n-head').value),
                 n_embd: parseInt(document.getElementById('n-embd').value),
-                block_size: parseInt(document.getElementById('block-size').value)
+                block_size: parseInt(document.getElementById('block-size').value),
+                train_val_split: parseFloat(document.getElementById('train-val-split').value),
+                backend: document.getElementById('backend').value,
+                compile: document.getElementById('compile-enabled').checked
             };
+            
+            // Add DDP parameters if enabled
+            const ddpEnabled = document.getElementById('ddp-enabled').checked;
+            if (ddpEnabled) {
+                config.ddp_enabled = true;
+                config.nproc_per_node = parseInt(document.getElementById('nproc-per-node').value);
+                config.nnodes = parseInt(document.getElementById('nnodes').value);
+                config.master_addr = document.getElementById('master-addr').value;
+                config.master_port = parseInt(document.getElementById('master-port').value);
+            }
             
             formData.append('config', JSON.stringify(config));
             
