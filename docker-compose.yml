@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  nanollm-gpt:
+    image: nanollm-gpt
+    build:
+      context: .
+      dockerfile: Dockerfile
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount directories for persistent storage
+      - ./models:/workspace/nanoLLM_gpt/models
+      - ./data:/workspace/nanoLLM_gpt/data
+      - ./out:/workspace/nanoLLM_gpt/out
+      - ./uploads:/workspace/nanoLLM_gpt/uploads
+      - ./logs:/workspace/nanoLLM_gpt/logs
+      # Optional: Mount config directory if you have custom configs
+      - ./config:/workspace/nanoLLM_gpt/config:ro
+      # Optional: Mount Claude Code config for persistence
+      - ~/.config/claude-code:/root/.config/claude-code
+    command: gpt-server
+    # Uncomment for interactive development
+    # stdin_open: true
+    # tty: true
+    # command: /bin/bash
+
+  # Optional: Jupyter notebook service for interactive development
+  jupyter:
+    image: nanollm-gpt
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./models:/workspace/nanoLLM_gpt/models
+      - ./data:/workspace/nanoLLM_gpt/data
+      - ./notebooks:/workspace/nanoLLM_gpt/notebooks
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+    profiles:
+      - dev
+
+# Docker Compose usage examples:
+# 
+# Start the web server:
+#   docker-compose up
+#
+# Start in background:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f
+#
+# Stop services:
+#   docker-compose down
+#
+# Start with Jupyter (dev profile):
+#   docker-compose --profile dev up
+#
+# Run training:
+#   docker-compose run --rm nanollm-gpt gpt-train --data-path data/input.txt
+#
+# Interactive shell:
+#   docker-compose run --rm nanollm-gpt /bin/bash
+#
+# Multi-GPU training:
+#   docker-compose run --rm nanollm-gpt bash -c "torchrun --nproc_per_node=4 -m nanoLLM_gpt.train --config config/train.yaml"

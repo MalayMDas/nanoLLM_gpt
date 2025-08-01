@@ -62,6 +62,28 @@ pip install -e ".[dev,datasets,wandb]"
 pytest
 ```
 
+### Docker Installation
+
+For GPU-accelerated containerized deployment:
+
+```bash
+# Build the Docker image
+docker build -t nanollm-gpt .
+
+# Run with GPU support
+docker run --gpus all -p 8080:8080 nanollm-gpt gpt-server
+
+# Run with GPU support and open the terminal
+docker run --gpus all -p 8080:8080 -it nanollm-gpt /bin/bash
+
+# Train with persistent storage
+docker run --gpus all -v $(pwd)/models:/workspace/nanoLLM_gpt/models \
+  -v $(pwd)/data:/workspace/nanoLLM_gpt/data \
+  nanollm-gpt gpt-train --data-path data/input.txt
+```
+
+See the [Technical Handbook](handbook.md#docker-installation) for detailed Docker usage including multi-GPU training, saving/loading images, and Claude Code integration.
+
 ## Quick Start
 
 ### 1. Generate Text

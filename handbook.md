@@ -811,9 +811,161 @@ pip install -e ".[dev,datasets,wandb]"
 ```
 
 #### Docker Installation
+
+##### Building the Docker Image
+
+1. **Build the image with multi-GPU support:**
 ```bash
+# Build the Docker image
 docker build -t nanollm-gpt .
-docker run -p 8080:8080 nanollm-gpt
+
+# For faster rebuilds with build cache
+docker build --cache-from nanollm-gpt -t nanollm-gpt .
+```
+
+2. **Build with custom CUDA version (if needed):**
+```bash
+# Modify the base image in Dockerfile first, then build
+docker build --build-arg CUDA_VERSION=11.8 -t nanollm-gpt:cuda11.8 .
+```
+
+##### Running the Docker Container
+
+1. **Basic usage with GPU support:**
+```bash
+# Check environment and available commands
+docker run --gpus all -it nanollm-gpt
+
+# Start the web server
+docker run --gpus all -p 8080:8080 -it nanollm-gpt gpt-server
+
+# Train a model with persistent storage
+docker run --gpus all -v $(pwd)/models:/workspace/nanoLLM_gpt/models \
+  -v $(pwd)/data:/workspace/nanoLLM_gpt/data \
+  -v $(pwd)/out:/workspace/nanoLLM_gpt/out \
+  -it nanollm-gpt gpt-train --data-path data/input.txt
+```
+
+2. **Multi-GPU training:**
+```bash
+# Use all available GPUs
+docker run --gpus all -v $(pwd)/models:/workspace/nanoLLM_gpt/models \
+  -it nanollm-gpt bash -c "torchrun --nproc_per_node=\$(nvidia-smi -L | wc -l) \
+  -m nanoLLM_gpt.train --config config/train_config.yaml"
+
+# Use specific GPUs (e.g., GPU 0 and 1)
+docker run --gpus '"device=0,1"' -v $(pwd)/models:/workspace/nanoLLM_gpt/models \
+  -it nanollm-gpt bash -c "torchrun --nproc_per_node=2 \
+  -m nanoLLM_gpt.train --config config/train_config.yaml"
+```
+
+3. **Interactive development with Claude Code:**
+```bash
+# Run interactive shell with all tools available
+docker run --gpus all -it \
+  -v $(pwd):/workspace/nanoLLM_gpt \
+  -v ~/.config/claude-code:/root/.config/claude-code \
+  nanollm-gpt /bin/bash
+
+# Inside container, set up Claude Code (first time only)
+claude-code setup
+
+# Use Claude Code for development
+claude-code "Help me optimize the training loop"
+```
+
+4. **Docker Compose (create docker-compose.yml):**
+```yaml
+version: '3.8'
+services:
+  nanollm-gpt:
+    image: nanollm-gpt
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/workspace/nanoLLM_gpt/models
+      - ./data:/workspace/nanoLLM_gpt/data
+      - ./out:/workspace/nanoLLM_gpt/out
+      - ./uploads:/workspace/nanoLLM_gpt/uploads
+    command: gpt-server
+```
+
+Run with: `docker-compose up`
+
+##### Saving and Loading Docker Images
+
+1. **Save the image to a file:**
+```bash
+# Save to compressed tar file
+docker save nanollm-gpt | gzip > nanollm-gpt.tar.gz
+
+# Save with progress bar (requires pv)
+docker save nanollm-gpt | pv | gzip > nanollm-gpt.tar.gz
+```
+
+2. **Load the image from a file:**
+```bash
+# Load from compressed tar file
+docker load < nanollm-gpt.tar.gz
+
+# Or with gzip
+gunzip -c nanollm-gpt.tar.gz | docker load
+
+# With progress bar
+pv nanollm-gpt.tar.gz | gunzip | docker load
+```
+
+3. **Transfer image between machines:**
+```bash
+# On source machine
+docker save nanollm-gpt | gzip | ssh user@target-machine "gunzip | docker load"
+
+# Using a registry (recommended for production)
+# Tag and push to registry
+docker tag nanollm-gpt myregistry.com/nanollm-gpt:latest
+docker push myregistry.com/nanollm-gpt:latest
+
+# Pull on target machine
+docker pull myregistry.com/nanollm-gpt:latest
+```
+
+##### Docker Best Practices
+
+1. **Resource Management:**
+```bash
+# Limit memory and CPU
+docker run --gpus all --memory="16g" --cpus="8" \
+  -it nanollm-gpt gpt-train --config config/train.yaml
+
+# Set shared memory size for DataLoader workers
+docker run --gpus all --shm-size=8g \
+  -it nanollm-gpt gpt-train --config config/train.yaml
+```
+
+2. **Debugging GPU Issues:**
+```bash
+# Check GPU visibility in container
+docker run --gpus all nanollm-gpt nvidia-smi
+
+# Test PyTorch GPU access
+docker run --gpus all nanollm-gpt python -c \
+  "import torch; print(f'GPUs available: {torch.cuda.device_count()}')"
+```
+
+3. **Development Workflow:**
+```bash
+# Mount source code for live development
+docker run --gpus all -it \
+  -v $(pwd)/nanoLLM_gpt:/workspace/nanoLLM_gpt/nanoLLM_gpt \
+  -v $(pwd)/models:/workspace/nanoLLM_gpt/models \
+  --name nanollm-dev \
+  nanollm-gpt /bin/bash
+
+# In another terminal, execute commands in running container
+docker exec -it nanollm-dev gpt-train --help
 ```
 
 ### Training Guide
